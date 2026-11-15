@@ -42,14 +42,16 @@ def datas(lines, first):
 def image(lines, tt):
     """the code image as the loader builds it (before the pointers are patched)"""
     d = datas(lines, 1000)
-    nseg = d[0]; segs = [(d[1 + 2 * i], d[2 + 2 * i]) for i in range(nseg)]
-    stream = d[1 + 2 * nseg:-1]; chk = d[-1]
-    assert sum(stream) == chk, 'checksum of the DATA lines'
+    nseg = d[0]; pos = 1; chunks = []; total = 0
+    for _ in range(nseg):                 # the same order as the BASIC loader reads: offset, length, bytes
+        off, ln = d[pos], d[pos + 1]; pos += 2
+        chunks.append((off, d[pos:pos + ln])); pos += ln; total += sum(d[pos - ln:pos])
+        assert all(0 <= x <= 255 for x in d[pos - ln:pos]), 'byte out of range'
+    chk = d[pos]; assert pos + 1 == len(d), 'DATA left over'
+    assert total == chk, 'checksum of the DATA lines'
     img = bytearray(0x300)
-    p = 0
-    for off, ln in segs:
-        img[off:off + ln] = bytes(stream[p:p + ln]); p += ln
-    assert p == len(stream)
+    for off, bs in chunks:
+        img[off:off + len(bs)] = bytes(bs)
     t = datas(lines, 900)
     n = t[0]
     for i in range(n):

@@ -85,7 +85,9 @@ def build():
     add(140, 'TT(7)=0:TT(8)=0:REM POLARITY TX, RX: 0=NORMAL (IDLE HIGH), 1=INVERTED')
     add(150, 'TT(9)=0:TT(10)=36:REM WAIT FOR THE FIRST BYTE = 45*256*256*36 T = 30 S')
     add(160, 'TT(11)=154:TT(12)=1:REM END OF PACKET = 45*256*154*1 T = 0.5 S')
-    add(200, 'A=0:INPUT "ML ADDRESS (ENTER=49349) ";A:IF A=0 THEN LET A=49349')
+    add(200, 'A=0:INPUT "ML ADDRESS (ENTER=49349) ";A')
+    add(201, 'IF A=0 THEN LET A=49349')
+    add(202, 'IF A<49152 OR A>64000 THEN GOTO 200')
     add(210, 'REM --- STORE THE CODE (SEROUT, SERIN, SEARCH ROUTINE PROBE AT A+512) ---')
     add(220, 'RESTORE 1000:READ N:C=0')
     add(230, 'FOR S=1 TO N:READ O,L')
@@ -129,11 +131,16 @@ def build():
         add(n + 2, 'DATA %d,%d' % (lab['pr_sh'] + 1, lab['pr_np'] + 1))
     add(960, 'PRINT "DATA ERROR: CHECK THE LISTING":BEEP 3:END')
     add(970, 'PRINT "Z-80 ADDRESS UNSURE":PRINT "NEW 1000 DONE?":BEEP 3:END')
-    add(1000, 'DATA %d,%s' % (len(segs), ','.join('%d,%d' % (a, b - a) for a, b in segs)))
-    add(1005, 'REM THE CODE BYTES (SEROUT, SERIN, PROBE), THEN THEIR SUM')
-    dl = data_lines(1010, stream)
-    L += dl
-    add(dl[-1][0] + 10, 'DATA %d' % chk)
+    add(1000, 'DATA %d' % len(segs))
+    add(1005, 'REM PER PIECE: OFFSET, LENGTH, BYTES. AT THE END: SUM OF ALL BYTES')
+    n = 1010
+    for a, b in segs:
+        add(n, 'DATA %d,%d' % (a, b - a))
+        n += 10
+        for k, t in data_lines(n, list(code[a:b])):
+            add(k, t)
+        n = k + 10
+    add(n, 'DATA %d' % chk)
     L.sort()
     nums = [n for n, _ in L]
     assert len(set(nums)) == len(nums), 'duplicate line numbers'
