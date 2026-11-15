@@ -53,6 +53,9 @@ used. According to the PC-1600 schematic and the Technical Reference the levels 
 |---|---|
 | `Basic/uart1600.txt` | **UART1600 loader**: BASIC program that stores SEROUT/SERIN in RAM, finds the right addresses and patches the timing |
 | `Basic/uart1600_test.txt` | TX/RX test (run it after UART1600) |
+| `wav/uart1600.wav` | tape recording of the loader for `LOAD "CAS:UART1600"` (about 2.5 minutes) |
+| `wav/uart1600_test.wav` | tape recording of the test program for `LOAD "CAS:UARTTEST"` (about 1 minute) |
+| `tools/pc1600_bas2wav.py` | BASIC text -> tape recording (WAV) and decoder check (from the PC-1600 game repository); lines must not exceed 80 characters |
 | `asm/uart1600.asm` | source of SEROUT, SERIN and PROBE (assembler: `z80asm`) with all comments |
 | `tools/build_loader.py` | makes `Basic/uart1600.txt` from `asm/uart1600.asm` (needs `z80asm`) |
 | `tools/verify_listing.py` | emulator test of the loader listing (needs `pip install z80` and `z80asm`) |
@@ -62,7 +65,7 @@ used. According to the PC-1600 schematic and the Technical Reference the levels 
 1. Switch the PC-1600 to **MODE 0** (the default). Type `NEW 1000` [ENTER]. This reserves the machine-language area
    197 to 1000 (the manual of the PC-1600: `NEW <address>` reserves the addresses 197 to `<address>` for machine
    language). UART1600 needs 767 bytes from its start address (197 by default).
-2. Load `Basic/uart1600.txt`: through the serial port or the tape interface as usual for a PC-1600 program, or type it in.
+2. Load `Basic/uart1600.txt`: from tape (CE-1600P, EAR input; MODE 0: `LOAD "CAS:UART1600"`, play `wav/uart1600.wav`), through the serial port, or type it in. The recordings were only checked with the decoder of the tool, not on a real PC-1600.
    The listing has 82 lines of at most 95 characters; the code is in `DATA` lines and has a checksum.
 3. `RUN`. The loader asks `ML ADDRESS (ENTER=197)`: ENTER if you did `NEW 1000`. It then
    - stores the code with `POKE`s and checks the `DATA` checksum (`DATA ERROR` = a typing or transfer error),
