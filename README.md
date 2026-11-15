@@ -62,15 +62,19 @@ used. According to the PC-1600 schematic and the Technical Reference the levels 
 
 ## How to use
 
-1. Switch the PC-1600 to **MODE 0** (the default) and to RUN mode. The code goes to the RAM at the top of the Z-80 memory,
-   by default at **&F900** (63744) to &FBFE (767 bytes). In block 0 the addresses of this RAM are the Z-80 addresses
-   (checked on a real PC-1600 with `POKE &F900,123 : PRINT PEEK(&F900)`, which gives 123). The addresses below about
-   32767, such as 197 or 27000, are ROM there: `POKE` does nothing. `NEW <address>` gave errors 25 and 26 on the machine
-   that was used for the tests, so UART1600 does not use it. Fan pages of the PC-1600 put machine code at `&F8C0` and
-   `&FBC0`, so this area is probably free, but it is **not reserved** by the system: BASIC does not know about it.
+1. Switch the PC-1600 to **MODE 0** (the default) and to RUN mode. The BASIC addresses of `POKE`, `PEEK` and `CALL` are
+   the Z-80 addresses. According to the memory map of the PC-1600 manual (Appendix D, bank 0, internal RAM seen from the Z-80):
+   `C000H`-`C007H` header, `C008H`-`C0C4H` reserve program area, **from `C0C5H` the machine-language area** (its size is set
+   with `NEW`), then the BASIC program area and the variables up to `EFFFH`, and `F000H`-`FFFFH` the **work area of the
+   system: never write there**. UART1600 puts its 767 bytes at **`C0C5H` = 49349** (up to `C3C3H`), so the machine-language area
+   must be at least 767 bytes long. On the machine used for the tests `STATUS 2` showed 6342, which suggests that about
+   6 KB are reserved already (197 + 6145); check it yourself with `POKE &C0C5,123 : PRINT PEEK(&C0C5)` on an empty
+   machine before loading anything (`NEW` without an address keeps the reservation). The low addresses (197, 27000) are ROM:
+   `POKE` does nothing there. `NEW <address>` gave errors 25 and 26 on that machine (25: invalid address, 26: invalid mode:
+   wrong mode or not in RUN mode), see below.
 2. Load `Basic/uart1600.txt`: from tape (CE-1600P, EAR input; MODE 0: `LOAD "CAS:UART1600"`, play `wav/uart1600.wav`), through the serial port, or type it in. The recordings were only checked with the decoder of the tool, not on a real PC-1600.
    The listing has 82 lines of at most 95 characters; the code is in `DATA` lines and has a checksum.
-3. `RUN`. The loader asks `ML ADDRESS (ENTER=63744)`: ENTER takes &F900. It then
+3. `RUN`. The loader asks `ML ADDRESS (ENTER=49349)`: ENTER takes &C0C5. It then
    - stores the code with `POKE`s and checks the `DATA` checksum (`DATA ERROR` = a typing or transfer error),
    - **finds the Z-80 address** that belongs to the BASIC address (see below),
    - patches the buffer addresses and the timing bytes from the variables in lines 110 to 160,
@@ -80,14 +84,14 @@ used. According to the PC-1600 schematic and the Technical Reference the levels 
 5. To test, load
    `Basic/uart1600_test.txt` and `RUN` it. Menu: `1` sends `HELLO PC-1600`, `2` receives packets (optional echo),
    `3` sends 255 bytes of 55H again and again (a square wave of one bit per half period, for an oscilloscope).
-6. The routines stay in memory (RAM at `&F900`) for your own programs until the memory is cleared or something else writes there.
+6. The routines stay in memory (RAM at `&C0C5`) for your own programs until the memory is cleared or something else writes there.
 
 Run the loader again to change a variable (speed, polarity). The routines are lost when the memory is cleared
 (ALL RESET, or when something overwrites the area).
 
 ## Commands
 
-Addresses for the default start address `A` = 63744 (the loader shows them for your address; all offsets are from `A`):
+Addresses for the default start address `A` = 49349 (the loader shows them for your address; all offsets are from `A`):
 
 | Command | Action |
 |---|---|
@@ -115,22 +119,21 @@ Addresses for the default start address `A` = 63744 (the loader shows them for y
 Example (text to a terminal):
 
 ```
-10 A=63744 : POKE A+256, 72, 69, 76, 76, 79, 13, 10
+10 A=49349 : POKE A+256, 72, 69, 76, 76, 79, 13, 10
 20 N=7 : CALL A, N
 ```
 
 Example (receive a packet and print it):
 
 ```
-10 A=63744 : N=0 : CALL A+80, N
+10 A=49349 : N=0 : CALL A+80, N
 20 FOR J=0 TO N-1 : PRINT CHR$(PEEK(A+512+J)); : NEXT J
 ```
 
 ## How the loader finds the addresses
 
 The code needs the buffer addresses as Z-80 addresses, but BASIC (`POKE`, `PEEK`, `CALL`) uses the addresses of
-the memory block 0. On the test machine the addresses of the RAM at `&F900` are the Z-80 addresses, but the loader
-does not rely on it, and checks:
+the memory block 0. The addresses of the internal RAM are the Z-80 addresses (`C000H` ...), but the loader does not rely on it, and checks:
 
 1. It stores the small routine **PROBE** at `A+512` (in the RX buffer, which is free at load time) and `POKE`s an 8-byte
    signature into the TX buffer (`A+256`).
@@ -200,7 +203,7 @@ times grow by about 0.5 %.
 | Levels and buffers at CN9 pins 27 and 29 | the schematic shows no buffer, but this is unchecked on a real machine |
 | Interrupts | `DI` at the start, `EI` at the end |
 | `CALL` register contract of the PC-1600 BASIC | the manual: the numeric variable goes in DE, and comes back in DE if the carry is set. SERIN and PROBE set the carry; SEROUT clears it and keeps AF, BC, DE and HL; SERIN keeps AF, BC and HL. Alternate registers and IX, IY are not used |
-| The area `&F900`-`&FBFE` is free | not reserved by the system, taken from fan pages; if the machine behaves strangely, use another address (the loader asks) |
+| The machine-language area at `C0C5H` is at least 767 bytes long | to be checked with `STATUS 2` / `POKE` (see How to use); if it is shorter, the code overwrites the BASIC program |
 | Whether memory reads of `8000H`-`FFFFH` have side effects | assumed not (reads of ordinary RAM, ROM and card windows) |
 
 ## Rebuilding
