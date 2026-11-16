@@ -4,8 +4,7 @@
 It does what the BASIC loader does (reads the DATA lines, stores the code at a trial address, patches the
 pointers and the timing bytes from the tables of the listing, using the TT() values of lines 110-160) and
 then runs SEROUT and SERIN against an ideal 19200 bps partner. The timing is counted in Z-80 T-states
-(CPU 3.579545 MHz, standard Zilog timing, I/O cycles WITHOUT the extra wait state of the PC-1600 - the
-sweep shows how much margin there is). This is a simulation: it says nothing about the real PC-1600.
+(CPU 3.0 MHz as measured on a real PC-1600, standard Zilog timing). This is a simulation: it says nothing about the real PC-1600.
 
 Usage:  python3 tools/verify_listing.py [Basic/uart1600.txt] [baud]
 """
@@ -13,7 +12,7 @@ import bisect, os, random, re, sys
 import z80
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FCLK = 3579545.0
+FCLK = 3.0e6            # measured on a real PC-1600: about 2.9-3.06 MHz (not 3.58 MHz)
 FRAME = 100000          # the emulator's run() returns every 100000 T-states
 
 

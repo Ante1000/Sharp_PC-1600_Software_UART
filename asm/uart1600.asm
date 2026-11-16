@@ -1,5 +1,5 @@
 ; UART1600 v1.0: software UART (bit-bang) for the Sharp PC-1600, 8N1, 19200 bps (the delay parameters allow other speeds)
-; CPU: Z-80 compatible (SC7852), 3.58 MHz. Assembler: z80asm (Debian/Ubuntu package z80asm).
+; CPU: Z-80 compatible (SC7852), about 3.0 MHz (measured on a real PC-1600). Assembler: z80asm (Debian/Ubuntu package z80asm).
 ;   TX = PC7 : OPC register, I/O 18H bit 7  -> CN9 pin 29 (CMTout)
 ;   RX = PB2 : OPB register, I/O 1FH bit 2  -> CN9 pin 27 (CMTin)
 ; The code contains no CALLs and no absolute jumps: it can be loaded at any address. The only
