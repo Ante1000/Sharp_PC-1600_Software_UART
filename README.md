@@ -7,10 +7,9 @@ without any modification of the computer. It is the PC-1600 relative of
 (one `CALL` sends, one `CALL` receives, packet mode, buffers filled with `POKE`/`PEEK`) and the same pins, PC7 and PB2.
 
 > ## Status
-> Tried on a real PC-1600 (MODE 0) with a USB-UART (TTL) and a terminal program, in both directions (TX and RX):
-> **2400, 19200, 28800 and 38400 bps**. The other speeds (300, 600, 1200, 4800, 9600, 14400 ...) are calculated by the loader
-> with the same formulas and were checked in a Z-80 emulator (`tools/verify_listing.py`), not on the machine.
-> Not yet tried: long transfers, signal levels with devices other than a TTL USB-UART, the effect of the unknown port C bits.
+> Tried on a real PC-1600 (MODE 0) with a USB-UART (TTL) and a terminal program, in both directions (TX and RX), at **all the speeds
+> the loader offers (300 to 38400 bps)**. The emulator test (`tools/verify_listing.py`) covers the code and the formulas.
+> Not yet tried: long transfers, signal levels with devices other than a TTL USB-UART.
 > **Do not connect anything but a CMOS/TTL level device.**
 >
 > **The buzzer shares the line of pin 29.** Every `BEEP` (and every error beep) sends a ~4 kHz tone to the TX pin,
@@ -213,7 +212,7 @@ one step of `TT(2)` or `TT(4)` (4 T-states, 2.6 % at 3 MHz) off. To adjust:
 
 In the emulator (3.0 MHz) the receiver reads correctly when the partner is between about -2 % and +4 % off the nominal speed
 and the sender is read correctly by an ideal receiver between about -4 % and +4 %, at all speeds up to 19200 bps
-(see the output of `tools/verify_listing.py`). From 28800 bps the simulation is only informative; the machine decides.
+(see the output of `tools/verify_listing.py`). From 28800 bps the simulation is only informative; the speeds up to 38400 bps work on the real machine.
 
 ## What is not known, and how the loader deals with it
 
