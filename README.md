@@ -1,27 +1,29 @@
 # UART1600: Software UART for Sharp PC-1600
 
 **UART1600: SEROUT and SERIN routines** for the Sharp PC-1600 pocket computer, a Z-80 machine-language
-bit-bang UART (8N1, **19200 bps**) on two lines of the 60-pin system connector (CN9), without the RS-232C port and
+bit-bang UART (8N1, **300 to 38400 bps**) on two lines of the 60-pin system connector (CN9), without the RS-232C port and
 without any modification of the computer. It is the PC-1600 relative of
 [UART7.3 for the PC-1500(A)](https://github.com/Ante1000/Sharp_PC-1500_Software_UART): the same `CALL` interface
 (one `CALL` sends, one `CALL` receives, packet mode, buffers filled with `POKE`/`PEEK`) and the same pins, PC7 and PB2.
 
-> ## Status: first tests on a real PC-1600 (MODE 0)
-> Tested by the author with a USB-UART (TTL) and a terminal program: **2400 bps in both directions works**, at **19200 bps**
-> the receiving (RX) works and the sending (TX) works too (`HELLO PC-1600` arrives correctly).
-> Not yet tested: long transfers, other speeds, signal levels with devices other than a TTL USB-UART, the effect of the
-> unknown port C bits. **Do not connect anything but a CMOS/TTL level device.**
+> ## Status
+> Tried on a real PC-1600 (MODE 0) with a USB-UART (TTL) and a terminal program, in both directions (TX and RX):
+> **2400, 19200, 28800 and 38400 bps**. The other speeds (300, 600, 1200, 4800, 9600, 14400 ...) are calculated by the loader
+> with the same formulas and were checked in a Z-80 emulator (`tools/verify_listing.py`), not on the machine.
+> Not yet tried: long transfers, signal levels with devices other than a TTL USB-UART, the effect of the unknown port C bits.
+> **Do not connect anything but a CMOS/TTL level device.**
 >
 > **The buzzer shares the line of pin 29.** Every `BEEP` (and every error beep) sends a ~4 kHz tone to the TX pin,
-> which a terminal shows as garbage such as `ĆĆĆÎÎÎ`. Use `BEEP OFF` in programs that use the UART (the test program does).
+> which a terminal shows as garbage such as `ĆĆĆÎÎÎ`. Use `BEEP OFF` in programs that use the UART (the loader and the
+> test program do).
 > The CPU of the PC-1600 was measured at about 3.0 MHz (2.9-3.06 MHz in two loops timed with a stopwatch), not 3.58 MHz,
-> so all timing values below are for 3.0 MHz.
+> so all timing values are for 3.0 MHz.
 
 ## What it is
 
 - **SEROUT** (send) and **SERIN** (receive) in about 200 bytes of Z-80 code, plus two 255-byte buffers (TX, RX).
-- **19200 bps only**, format **8N1** (8 data bits, no parity, 1 stop bit), no handshake. The timing is set by variables
-  of the loader (`TT(1)` ... `TT(12)`), so other speeds can be added later; see [Other speeds](#other-speeds).
+- **300 to 38400 bps**, format **8N1** (8 data bits, no parity, 1 stop bit), no handshake. The loader asks for the speed
+  (`BAUD 300-38400`), calculates the delay values from it and patches them into the code; see [Speeds](#speeds).
 - Packet mode like UART7.3: SEROUT sends `m` bytes from the TX buffer; SERIN waits up to about 30 s for the first byte
   and returns when no further byte arrives within about 0.5 s (or when the buffer count is reached).
 - An inversion option (`TT(7)`, `TT(8)`) for devices with inverted levels.
@@ -47,7 +49,7 @@ used. According to the PC-1600 schematic and the Technical Reference the levels 
 - A device with 3.3 V logic (ESP32 and the like) can drive PB2 directly if its high level reaches the input threshold
   of PB2 (not measured); in the PC-1600 -> 3.3 V direction use a divider (e.g. 47 kΩ in series and 100 kΩ to GND),
   because the output swings up to about 4.5 V.
-- A USB-UART adapter with TTL levels (FTDI cable, CP2102, CH340) works as the partner, with the terminal at 19200 baud, 8N1.
+- A USB-UART adapter with TTL levels (FTDI cable, CP2102, CH340) works as the partner, with the terminal at the speed chosen in the loader, 8N1.
 - Pin 11 and pin 41 of CN9 are VCC, 39 is VGG, 45/46 are VBAT: **do not short them**. Use a 1.27 mm dual-row header
   (2 x 30 pins) or an adapter; the pin numbering is that of the PC-1600 service documents.
 
@@ -57,7 +59,7 @@ used. According to the PC-1600 schematic and the Technical Reference the levels 
 |---|---|
 | `Basic/uart1600.txt` | **UART1600 loader**: BASIC program that stores SEROUT/SERIN in RAM, finds the right addresses and patches the timing |
 | `Basic/uart1600_test.txt` | TX/RX test (run it after UART1600) |
-| `wav/uart1600.wav` | tape recording of the loader for `LOAD "CAS:UART1600"` (about 2.5 minutes) |
+| `wav/uart1600.wav` | tape recording of the loader for `LOAD "CAS:UART1600"` (about 4 minutes) |
 | `wav/uart1600_test.wav` | tape recording of the test program for `LOAD "CAS:UARTTEST"` (about 1 minute) |
 | `tools/pc1600_bas2wav.py` | BASIC text -> tape recording (WAV) and decoder check (from the PC-1600 game repository); lines must not exceed 80 characters |
 | `asm/uart1600.asm` | source of SEROUT, SERIN and PROBE (assembler: `z80asm`) with all comments |
@@ -77,13 +79,14 @@ used. According to the PC-1600 schematic and the Technical Reference the levels 
    `POKE` does nothing there. `NEW <address>` gave errors 25 and 26 on that machine (25: invalid address, 26: invalid mode:
    wrong mode or not in RUN mode), see below.
 2. Load `Basic/uart1600.txt`: from tape (CE-1600P, EAR input; MODE 0: `LOAD "CAS:UART1600"`, play `wav/uart1600.wav`), through the serial port, or type it in. The recordings were only checked with the decoder of the tool, not on a real PC-1600.
-   The listing has 82 lines of at most 95 characters; the code is in `DATA` lines and has a checksum.
-3. `RUN`. The loader asks `ML ADDRESS (ENTER=49349)`: ENTER takes &C0C5. It then
+   The listing has about 150 lines of at most 80 characters; the code is in `DATA` lines and has a checksum.
+3. `RUN`. The loader asks `BAUD 300-38400 (ENTER=19200)` (any value from 300 to 28800, or 38400; ENTER = 19200) and then
+   `ML ADDRESS (ENTER=49349)`: ENTER takes &C0C5. It then
    - stores the code with `POKE`s and checks the `DATA` checksum (`DATA ERROR` = a typing or transfer error),
    - **finds the Z-80 address** that belongs to the BASIC address (see below),
-   - patches the buffer addresses and the timing bytes from the variables in lines 110 to 160,
+   - calculates the timing for the speed and patches the buffer addresses, the timing and the polarity (tables in lines 900 to 940),
    - checks that the code reads the buffer where BASIC wrote its marker, and shows
-     `UART1600 READY, 19200 BPS`, the `CALL` addresses and the buffer addresses.
+     `UART1600 READY, <speed> BPS`, the `CALL` addresses and the buffer addresses.
 4. Connect the other device as shown above.
 5. To test, load
    `Basic/uart1600_test.txt` and `RUN` it. Menu: `1` sends `HELLO PC-1600`, `2` receives packets (optional echo),
@@ -107,7 +110,7 @@ Addresses for the default start address `A` = 49349 (the loader shows them for y
 | `A+256` | TX buffer: put the data with `POKE A+256, 72, 69, ...` |
 | `A+512` | RX buffer: read the data with `PEEK` |
 | `A+511` | length of the last received packet |
-| `A+240` ... `A+242` | description written by the loader: 85 (`"U"`), Z-80 address of `A` low, high |
+| `A+250` ... `A+254` | description written by the loader: 85 (`"U"`), Z-80 address of `A` low, high, speed (bps) low, high |
 | `A+512` ... `A+591` | the search routine PROBE: the loader needs it only once; the first received packet overwrites it |
 
 - **Always pass a variable** (`CALL A,N`). A `CALL` without a variable leaves DE undefined and SEROUT would send a
@@ -152,57 +155,56 @@ The Z-80 address is returned as a number that may be shown as negative above 327
 (`IF X<0 THEN LET X=X+65536`), which assumes that the `CALL` returns DE as a signed 16-bit number.
 The search was tested in the emulator in RAM full of garbage and with partial copies of the signature as decoys.
 
-## Timing and the speed variables
+## Speeds
 
-The loader (lines 110 to 160) holds all the timing as variables, in CPU T-states. The Z-80 of the PC-1600 runs at about
-**3.0 MHz** (measured, see below), so one bit at 19200 bps = 156 T-states:
+The loader asks for the speed and calculates the timing in CPU T-states (the Z-80 of the PC-1600 runs at about **3.0 MHz**,
+so one bit = 3,000,000 / bps T-states, e.g. 156 T-states at 19200 bps). It works with the variables `TT(1)` ... `TT(17)`
+(lines 105 to 192 of the loader; you can change them in the listing, for example the polarity in line 111):
 
-| Variable | Meaning | 19200 bps |
-|---|---|---|
-| `TT(1)`, `TT(2)` | TX bit = 100 + 16 `TT(1)` - 4 `TT(2)` T-states (`TT(2)` = 0 ... 8) | 4, 2 (156 T) |
-| `TT(3)`, `TT(4)` | RX bit = 99 + 16 `TT(3)` - 4 `TT(4)` T-states | 4, 2 (155 T) |
-| `TT(5)`, `TT(6)` | check of the start bit after 83 + 16 `TT(5)` - 4 `TT(6)` T-states from its detection | 1, 8 |
-| `TT(7)`, `TT(8)` | polarity of TX and RX: 0 normal (idle high), 1 inverted | 0, 0 |
-| `TT(9)`, `TT(10)` | wait for the first byte: 45 x 256 x `TT(9)` x `TT(10)` T-states (`TT(9)` = 0 means 256) | 0, 30 (29.5 s) |
-| `TT(11)`, `TT(12)` | end of the packet: 45 x 256 x `TT(11)` x `TT(12)` T-states | 130, 1 (0.5 s) |
+| Variable | Meaning |
+|---|---|
+| `TT(1)`, `TT(2)` | TX bit = 100 + 16 `TT(1)` - 4 `TT(2)` T-states (fast code; `TT(2)` = 0 ... 8) |
+| `TT(3)`, `TT(4)` | RX bit = 99 + 16 `TT(3)` - 4 `TT(4)` T-states |
+| `TT(5)`, `TT(6)` | check of the start bit after 83 + 16 `TT(5)` - 4 `TT(6)` T-states from its detection |
+| `TT(7)`, `TT(8)` | polarity of TX and RX: 0 normal (idle high), 1 inverted |
+| `TT(9)`, `TT(10)` | wait for the first byte: 45 x 256 x `TT(9)` x `TT(10)` T-states (`TT(9)` = 0 means 256); 30 s |
+| `TT(11)`, `TT(12)` | end of the packet: 45 x 256 x `TT(11)` x `TT(12)` T-states; 0.5 s |
+| `TT(13)` | repeat count M of the delays in the slow code (bit = about 108 + M (15 + 16 `TT(1)`) - 4 `TT(2)` for TX) |
+| `TT(14)` ... `TT(17)` | the buffer pointers (low and high bytes), calculated by the loader |
 
-A step of `TT(2)` or `TT(4)` changes the bit time by 4 T-states (2.1 % at 19200), a step of `TT(1)` or `TT(3)` by 16.
+**Code variants** (made from the same source, `asm/uart1600.asm`):
+- **fast** (750 to 28800 bps): the loops of the table above; the loader calculates `TT(1)` ... `TT(6)` from the speed.
+  Examples: 2400 bps = 72, 0, 72, 0, 33, 2; 9600 bps = 14, 3, 14, 3, 4, 3; 19200 bps = 4, 2, 4, 2, 1, 8; 28800 bps = 1, 3, 1, 3, 1, 8.
+- **slow** (300 to 749 bps): every delay is repeated M times in an `EXX` loop (the loop of the fast code is limited to
+  about 4000 T-states per bit, i.e. 750 bps). The alternate registers BC' and DE' are saved and restored.
+- **38400 bps ("turbo")**: the fast code with four `JR` instructions in place of the delay loops (a bit of 82 T-states, 4 `NOP`s).
+  The check of the start bit is left out in this mode, so noise on the line can produce false bytes. `TU` in the loader.
 
-### Checking and adjusting the speed on the real machine
+### Checking and adjusting the speed
 
 The clock was measured with two machine-language loops, 10 calls each, timed with a stopwatch: a loop of `dec bc / ld a,b / or c / jr nz`
 (17.04 million T-states) took 5.9 s = 2.89 MHz, and a loop of `out (18H),a / djnz` (15.8 million T-states) took 5.15 s = 3.06 MHz.
 With the interrupts off, `OUT` is not slower than the other instructions. The accuracy is about 5 %, so a bit may be
-one step of `TT(2)` or `TT(4)` (4 T-states, 2.6 % at 3 MHz) off; adjust it as follows:
+one step of `TT(2)` or `TT(4)` (4 T-states, 2.6 % at 3 MHz) off. To adjust:
 
-1. TX: run the test, menu `3`, and measure a bit of the 55H stream (a square wave; one bit = half a period) with an
-   oscilloscope or a logic analyzer. The target is 52.1 µs (the first value to change is `TT(2)`). Without an
-   instrument: send `HELLO PC-1600` (menu `1`) to a terminal at 19200 baud; step `TT(2)` up and down until the text
-   becomes garbage on both sides and use the middle of the working range.
+1. TX: test menu `1` (`HELLO PC-1600`) or `3` (a stream of 55H bytes: a square wave, one bit = half a period, for an oscilloscope
+   the target at 19200 bps is 52.1 µs) with the terminal at the same speed; step `TT(2)` up and down.
 2. RX: send text from the terminal (menu `2`); do the same with `TT(4)`, `TT(5)` and `TT(6)`.
-3. Edit lines 110 to 140 of the loader and run it again.
-
-### Other speeds
-
-The loader does not offer them yet, but the code can do them. The formulas for the variables, with `bit` =
-3.0 million / baud T-states (3000000 / baud): choose `TT(1)`, `TT(2)` for `bit` - 100, `TT(3)`, `TT(4)` for `bit` - 99 and `TT(5)`, `TT(6)`
-for `bit` / 2 - 22 - 83, each in units of 4 T-states (`TT(n)` x 4 - `TT(n+1)` = the target / 4, `TT(n+1)` = 0 ... 8).
-`tools/verify_listing.py Basic/uart1600.txt <baud>` computes these values (function `params`) and checks the
-transfer in the emulator (at 3.0 MHz). It works there for 9600, 4800, 2400 and 1200 bps; 2400 bps with `TT(1..6)` = 72, 0, 72, 0, 33, 2
-was also tried on the real machine and works. At 3.0 MHz this code cannot do more than 19200 bps (the poll loop takes
-45 T-states, which is already 0.29 bit at 19200).
+3. At 38400 bps the length of the bit is set by the displacement bytes of the `JR` instructions (lines 940 / `TURBO_J` in
+   `tools/build_loader.py`): the value 9 in the first and third POKE gives 82 T-states; 10 gives 78 and 8 gives 86.
+4. You can also poke the new bytes directly (the code is at `A` = 49349) to try a setting without loading the loader again.
 
 ### Tolerance (simulation)
 
-Against an ideal partner at 19200 bps the receiver reads correctly when the partner is between about -2 % and +4 %
-off the nominal speed (the bytes may follow each other without a gap).
-The sender is read correctly by an ideal receiver that is between about -4 % and +6 % off the nominal speed.
+In the emulator (3.0 MHz) the receiver reads correctly when the partner is between about -2 % and +4 % off the nominal speed
+and the sender is read correctly by an ideal receiver between about -4 % and +4 %, at all speeds up to 19200 bps
+(see the output of `tools/verify_listing.py`). From 28800 bps the simulation is only informative; the machine decides.
 
 ## What is not known, and how the loader deals with it
 
 | Open point | What the code does |
 |---|---|
-| Z-80 timing of the PC-1600 | about 3.0 MHz (measured with a stopwatch, +-5 %); all timing in variables, see above |
+| Z-80 timing of the PC-1600 | about 3.0 MHz (measured with a stopwatch, +-5 %); the loader calculates the timing, see Speeds |
 | Z-80 address of the BASIC address `A` | PROBE searches for a signature in the RAM (read only), manual input as a fallback |
 | Port C | SEROUT writes the whole OPC register (18H): bit 7 = TX, **all other bits 0**. Bit 6 of OPC is inverted PC6 = "beep disable" according to the Technical Reference, written as 0. It is not known what the other bits of port C do on the PC-1600 and whether PC7 clicks the buzzer. If another bit matters, change `and 0x80` in `asm/uart1600.asm` |
 | Levels and buffers at CN9 pins 27 and 29 | the schematic shows no buffer, but this is unchecked on a real machine |

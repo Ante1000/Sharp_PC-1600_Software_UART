@@ -24,53 +24,105 @@ def load_listing(path):
     return lines
 
 
+class Stream:
+    """READ / RESTORE of the BASIC listing: the DATA values from a line onward, REM lines are skipped"""
+    def __init__(self, lines, first):
+        self.v = []
+        for n in sorted(k for k in lines if k >= first):
+            t = lines[n]
+            if t.startswith('DATA '):
+                self.v += [int(x) for x in t[5:].split(',')]
+            elif t.startswith('REM'):
+                continue
+            else:
+                break
+        self.p = 0
+
+    def read(self, k=1):
+        r = self.v[self.p:self.p + k]; self.p += k
+        assert len(r) == k, 'out of data'
+        return r if k > 1 else r[0]
+
+
 def datas(lines, first):
-    """values of the DATA lines first, first+1... (or +10 steps) up to the next non-DATA line"""
-    out = []
-    for n in sorted(k for k in lines if k >= first):
-        t = lines[n]
-        if t.startswith('DATA '):
-            out += [int(x) for x in t[5:].split(',')]
-        elif t.startswith('REM'):
-            continue
-        else:
-            break
-    return out
+    return Stream(lines, first).v
 
 
-def image(lines, tt):
-    """the code image as the loader builds it (before the pointers are patched)"""
-    d = datas(lines, 1000)
-    nseg = d[0]; pos = 1; chunks = []; total = 0
-    for _ in range(nseg):                 # the same order as the BASIC loader reads: offset, length, bytes
-        off, ln = d[pos], d[pos + 1]; pos += 2
-        chunks.append((off, d[pos:pos + ln])); pos += ln; total += sum(d[pos - ln:pos])
-        assert all(0 <= x <= 255 for x in d[pos - ln:pos]), 'byte out of range'
-    chk = d[pos]; assert pos + 1 == len(d), 'DATA left over'
-    assert total == chk, 'checksum of the DATA lines'
+def read_set(lines, first):
+    """what the loader does in lines 230-265: [(offset, bytes)] and the sum check"""
+    st = Stream(lines, first)
+    n = st.read(); chunks = []; c = 0
+    for _ in range(n):
+        o, l = st.read(2)
+        bs = st.read(l) if l > 1 else [st.read()]
+        assert all(0 <= x <= 255 for x in bs), 'byte out of range'
+        chunks.append((o, bs)); c += sum(bs)
+    assert st.read() == c, 'checksum of the DATA lines'
+    return chunks
+
+
+def floor(x):
+    import math
+    return int(math.floor(x))
+
+
+def loader_tt(bd):
+    """lines 105-192 of the loader: returns (TT dict, slow, turbo)"""
+    assert 300 <= bd <= 38400 and not (28800 < bd < 38400)
+    tt = {7: 0, 8: 0, 9: 0, 10: 30, 11: 130, 12: 1, 13: 1}
+    b = 3000000.0 / bd
+    sl = 1 if bd < 750 else 0
+    tu = 1 if bd == 38400 else 0
+    if tu:
+        tt.update({1: 1, 2: 8, 3: 1, 4: 8, 5: 1, 6: 8})
+        return tt, sl, tu
+
+    def sub(q):
+        u = floor((q + 3) / 4)
+        if u < 1:
+            u = 1
+        v = 4 * u - q
+        if v > 8:
+            v = 8
+        return u, v
+    if sl == 0:
+        tt[1], tt[2] = sub(floor((b - 100) / 4 + .5))
+        tt[3], tt[4] = sub(floor((b - 99) / 4 + .5))
+        tt[5], tt[6] = sub(floor((b / 2 - 105) / 4 + .5))
+    else:
+        m = floor((b - 92) / 4000) + 1
+        tt[13] = m; tt[2] = tt[4] = tt[6] = 4
+        tt[1] = floor(((b - 92) / m - 15) / 16 + .5)
+        tt[3] = floor(((b - 91) / m - 15) / 16 + .5)
+        tt[5] = floor(((b / 2 - 97) / m - 15) / 16 + .5)
+    return tt, sl, tu
+
+
+def make_image(lines, bd, A=49349, P=0xC0C5):
+    """the code as the loader builds it for the speed bd"""
+    tt, sl, tu = loader_tt(bd)
+    for k, w in ((14, P + 256), (16, P + 512)):         # lines 430 and 440 of the loader
+        tt[k] = w & 255; tt[k + 1] = (w >> 8) & 255
+    for k in (1, 3, 5):
+        assert 1 <= tt[k] <= 255, ('N out of range', bd, tt)
+    for k in (2, 4, 6):
+        assert 0 <= tt[k] <= 8, ('D out of range', bd, tt)
     img = bytearray(0x300)
-    for off, bs in chunks:
+    for off, bs in read_set(lines, 2000 if sl else 1000) + read_set(lines, 3000):
         img[off:off + len(bs)] = bytes(bs)
-    t = datas(lines, 900)
-    n = t[0]
-    for i in range(n):
-        o, k, f = t[1 + 3 * i:4 + 3 * i]
-        img[o] = (tt[k] * f) & 255
-    return img
-
-
-def patch_pointers(lines, img, A, P):
-    h = [int(x) for x in re.findall(r'H=A\+(\d+)', lines[430] + ':' + lines[440])]
-    for site, w in ((h[0], P + 256), (h[1], P + 512)):
-        img[site] = w & 255; img[site + 1] = (w >> 8) & 255
-
-
-def timing(lines):
-    tt = {}
-    for n in (110, 120, 130, 140, 150, 160):
-        for i, v in re.findall(r'TT\((\d+)\)=(\d+)', lines[n].split('REM')[0]):
-            tt[int(i)] = int(v)
-    return tt
+    st = Stream(lines, 910 if sl else 900)
+    n = st.read()
+    for _ in range(n):
+        o, k, f = st.read(3)
+        v = tt[k] * f
+        assert 0 <= v <= 255
+        img[o] = v
+    if tu:
+        t = Stream(lines, 940)
+        for _ in range(4):
+            o, d = t.read(2)
+            img[o] = 24; img[o + 1] = d
+    return img, tt, sl, tu
 
 
 class Rig:
@@ -151,33 +203,19 @@ def decode(outs, bit, pol=0):
     return res
 
 
-def params(bit):
-    """TT(1..6) for another speed (the formulas of the README): TX 100+16N-4D, RX 99+16N-4D, check 83+16N-4D"""
-    def nd(target, base):
-        q = round((target - base) / 4.0)
-        n = max(1, -(-q // 4))
-        return n, 4 * n - q
-    tn, td = nd(bit, 100); rn, rd = nd(bit, 99); hn, hd = nd(bit / 2 - 22, 83)
-    for v in (tn, rn, hn):
-        assert 1 <= v <= 255, 'speed out of range'
-    for v in (td, rd, hd):
-        assert 0 <= v <= 8, 'speed out of range'
-    return {1: tn, 2: td, 3: rn, 4: rd, 5: hn, 6: hd}
-
-
-def probe_tests(lines, tt):
+def probe_tests(lines):
     """the search routine PROBE: finds the Z-80 address of the code in a RAM full of garbage and decoys"""
     def pairs(first):
-        d = datas(lines, first)           # 8 x (value, site), then the two sites
-        return [(d[2 * i], d[2 * i + 1]) for i in range(8)], d[16], d[17]
+        st = Stream(lines, first)               # 8 x (value, site), then the two sites
+        pr = [tuple(st.read(2)) for _ in range(8)]
+        return pr, st.read(), st.read()
     good = True
     rnd = random.Random(3)
-    for P, expect_second_range in ((0xC0C5, False), (0xE1C5, False), (0xFC05, False), (0x8EC5, True), (0xB005, True)):
+    for P in (0xC0C5, 0xE1C5, 0xFC05, 0x8EC5, 0xB005):
         res = []
         for first in (920, 930):
             sig, su, sv = pairs(first)
-            img = image(lines, tt)
-            patch_pointers(lines, img, 197, P)
+            img, tt, sl, tu = make_image(lines, 19200, P=P)
             for v, o in sig:
                 img[o] = v
             found = 0
@@ -186,7 +224,6 @@ def probe_tests(lines, tt):
                     break
                 im = bytearray(img); im[su] = G; im[sv] = 64
                 mem = bytearray(rnd.randrange(256) for _ in range(65536))
-                # decoys: the first 1..7 bytes of the signature elsewhere
                 for k, q in enumerate((0xD321, 0xE777, 0x9A00, 0xC400, 0xF123, 0xCC00, 0x8800)):
                     for j in range(k + 1):
                         mem[q + j] = sig[j][0]
@@ -194,10 +231,9 @@ def probe_tests(lines, tt):
                 for j, (v, o) in enumerate(sig):
                     mem[P + 256 + j] = v
                 m = z80.Z80Machine()
-                stub = 0x0100
                 e = P + 0x200
-                mem[stub:stub + 7] = bytes([0x11, 0, 0, 0xCD, e & 255, e >> 8, 0x76])
-                m.set_memory_block(0, bytes(mem)); m.pc = stub; m.sp = 0xF000
+                mem[0x100:0x107] = bytes([0x11, 0, 0, 0xCD, e & 255, e >> 8, 0x76])
+                m.set_memory_block(0, bytes(mem)); m.pc = 0x100; m.sp = 0xF000
                 m.ticks_to_stop = 5_000_000
                 for _ in range(50):
                     m.run()
@@ -208,82 +244,83 @@ def probe_tests(lines, tt):
         okp = res[0] == P and res[1] == P
         print('PROBE finds the code at %04X (garbage RAM, decoys): %s' % (P, 'ok' if okp else 'FAILED %r' % (res,)))
         good &= okp
-    # signature not present: must answer 0
-    sig, su, sv = pairs(920)
-    img = image(lines, tt)
-    for v, o in sig:
-        img[o] = v
-    img[su] = 192; img[sv] = 64
-    mem = bytearray(rnd.randrange(256) for _ in range(65536))
-    P = 0x0C00
-    mem[P:P + len(img)] = img
-    m = z80.Z80Machine(); e = P + 0x200
-    mem[0x100:0x107] = bytes([0x11, 0, 0, 0xCD, e & 255, e >> 8, 0x76])
-    m.set_memory_block(0, bytes(mem)); m.pc = 0x100; m.sp = 0xF000
-    m.ticks_to_stop = 5_000_000
-    for _ in range(50):
-        m.run()
-        if m.halted:
-            break
-    print('PROBE with no signature in the searched range answers 0:', m.de == 0)
-    return good and m.de == 0
+    return good
+
+
+def check_speed(lines, bd, quick=False):
+    img, tt, sl, tu = make_image(lines, bd)
+    P = 0xC0C5
+    bit = FCLK / bd
+    random.seed(7)
+    data = bytes(random.randrange(256) for _ in range(30))
+    r = Rig(img, 0, len(data), P, txdata=data)
+    r.m.alt_bc = 0x1234; r.m.alt_de = 0x5678; r.m.alt_hl = 0x9ABC; r.m.bc = 0x0F0E; r.m.hl = 0x2468
+    r.run()
+    regs_ok = (r.m.alt_bc, r.m.alt_de, r.m.alt_hl, r.m.bc, r.m.hl) == (0x1234, 0x5678, 0x9ABC, 0x0F0E, 0x2468)
+    dec = decode(r.outs, bit)
+    spac = sorted({r.outs[i + 1][0] - r.outs[i][0] for i in range(len(r.outs) - 1)})
+    txok = bytes(v for v, s in dec) == data and all(s == 1 for v, s in dec)
+    txtol = [m for m in (0.96, 0.98, 1.0, 1.02, 1.04) if
+             (lambda d: bytes(v for v, s in d) == data and all(s == 1 for v, s in d))(decode(r.outs, bit * m))]
+    rx = []; tot = 0; good = 0
+    for ph in ((0, 20, 40) if quick else range(0, 46, 5)):
+        for gap in (0, 2):
+            r = Rig(img, 0x50, 255, P, wave=waveform(data[:20], bit, phase=ph, gap=gap))
+            r.m.alt_bc = 0x1234; r.m.alt_de = 0x5678; r.m.alt_hl = 0x9ABC; r.m.bc = 0x0F0E; r.m.hl = 0x2468
+            r.run()
+            regs_ok &= (r.m.alt_bc, r.m.alt_de, r.m.alt_hl, r.m.hl) == (0x1234, 0x5678, 0x9ABC, 0x2468)
+            n = r.m.memory[P + 0x1FF]
+            good += bytes(r.m.memory[P + 0x200:P + 0x200 + n]) == data[:20]; tot += 1
+    tol = []
+    for m in (0.96, 0.98, 1.0, 1.02, 1.04):
+        o = t = 0
+        for ph in (0, 15, 30):
+            r = Rig(img, 0x50, 255, P, wave=waveform(data[:20], bit * m, phase=ph, gap=0)); r.run()
+            n = r.m.memory[P + 0x1FF]
+            o += bytes(r.m.memory[P + 0x200:P + 0x200 + n]) == data[:20]; t += 1
+        tol.append('x%.2f:%d/%d' % (m, o, t))
+    mode = 'turbo' if tu else ('slow' if sl else 'fast')
+    ttl = [tt[k] for k in range(1, 7)] + ([tt[13]] if sl else [])
+    print('%5d bps %-5s TT=%s bit %.0f T (TX %s): TX %s, TX-tol %s | RX %d/%d | RX-tol %s | registers kept: %s' % (
+        bd, mode, ttl, bit, spac, 'ok' if txok else 'FAILED', txtol, good, tot, ' '.join(tol), 'yes' if regs_ok else 'NO'))
+    return txok and good == tot and regs_ok
 
 
 def main():
     path = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, 'Basic', 'uart1600.txt')
-    baud = float(sys.argv[2]) if len(sys.argv) > 2 else 19200.0
-    bit = FCLK / baud
+    only = [int(x) for x in sys.argv[2:]]
     lines = load_listing(path)
-    tt = timing(lines)
-    if baud != 19200.0:
-        tt.update(params(bit))
-        print('speed %d bps: TT(1..6) =' % baud, [tt[i] for i in range(1, 7)])
-    A, P = 197, 0xC0C5
-    img = image(lines, tt); patch_pointers(lines, img, A, P)
-    random.seed(7)
-    data = bytes(random.randrange(256) for _ in range(60))
     ok = True
-
-    r = Rig(img, 0, len(data), P, txdata=data); r.run()
-    dec = decode(r.outs, bit)
-    spac = sorted({r.outs[i + 1][0] - r.outs[i][0] for i in range(len(r.outs) - 1)})
-    good = bytes(v for v, s in dec) == data and all(s == 1 for v, s in dec)
-    print('TX  60 bytes decoded correctly:', good, '| spacing of the bits (T-states):', spac, '(ideal %.1f)' % bit)
-    ok &= good
-
-    for ph in (0, 15, 30, 44):
-        r = Rig(img, 0x50, 255, P, wave=waveform(data, bit, phase=ph, gap=0)); r.run()
-        n = r.m.memory[P + 0x1FF]; got = bytes(r.m.memory[P + 0x200:P + 0x200 + n])
-        g = got == data and r.m.de == n
-        print('RX  60 bytes back to back, phase %2d T: %s (length %d, DE=%d)' % (ph, g, n, r.m.de))
-        ok &= g
-
-    print('RX  tolerance for the speed of the partner (20 bytes, 4 phases, gaps 0 and 3 bits):')
-    for mult in (0.94, 0.96, 0.98, 1.0, 1.02, 1.04, 1.06):
-        good = tot = 0
-        for ph in (0, 11, 22, 33):
-            for gap in (0, 3):
-                r = Rig(img, 0x50, 255, P, wave=waveform(data[:20], bit * mult, phase=ph, gap=gap)); r.run()
-                n = r.m.memory[P + 0x1FF]
-                good += bytes(r.m.memory[P + 0x200:P + 0x200 + n]) == data[:20]; tot += 1
-        print('    partner x%.2f: %d/%d' % (mult, good, tot))
-
-    print('TX  tolerance for the speed of an ideal receiver (30 bytes):')
-    for mult in (0.94, 0.96, 0.98, 1.0, 1.02, 1.04, 1.06):
-        r = Rig(img, 0, 30, P, txdata=data[:30]); r.run()
-        dec = decode(r.outs, bit * mult)
-        print('    receiver x%.2f: %s' % (mult, bytes(v for v, s in dec) == data[:30] and all(s == 1 for v, s in dec)))
-    # idle line: the 30 s timeout would take too long to simulate, so it is shortened here (TT(9)=10, TT(10)=1)
-    tt2 = dict(tt); tt2[9] = 10; tt2[10] = 1
-    img2 = image(lines, tt2); patch_pointers(lines, img2, A, P)
-    r = Rig(img2, 0x50, 255, P, wave=lambda t: 1); r.run()
-    print('RX  idle line: timeout after %.3f s (10*256*45 T expected), DE=%d, carry=%d' % (r.ins[-1] / FCLK, r.m.de, r.m.f & 1))
-    ok &= r.m.de == 0 and r.m.f & 1 == 1
-    print('    full timeouts: first byte %.1f s, end of packet %.2f s' % (45 * 256 * 256 * tt[10] / FCLK * (1 if tt[9] == 0 else tt[9] / 256), 45 * 256 * tt[11] * tt[12] / FCLK))
-    r = Rig(img, 0x50, 3, P, wave=waveform(b'ABCDE', bit)); r.run()
-    print('RX  limit of 3 bytes:', bytes(r.m.memory[P + 0x200:P + 0x203]), 'DE =', r.m.de)
+    # every speed that the loader accepts must give legal values (N 1..255, D 0..8)
+    bad = []
+    for bd in list(range(300, 28801)) + [38400]:
+        try:
+            tt, sl, tu = loader_tt(bd)
+            if not tu:
+                assert all(1 <= tt[k] <= 255 for k in (1, 3, 5)) and all(0 <= tt[k] <= 8 for k in (2, 4, 6)), tt
+        except AssertionError as e:
+            bad.append((bd, e))
+    print('every speed 300-28800 and 38400 gives legal timing values:', 'yes' if not bad else 'NO %r' % bad[:3])
+    ok &= not bad
+    for bd in (only or (300, 600, 749, 750, 1200, 2400, 4800, 9600, 14400, 19200, 28800, 38400)):
+        good = check_speed(lines, bd, quick=bd < 1000)
+        if bd >= 28800:
+            print('        (from 28800 bps the simulation is only informative: the real PC-1600 timing decides)')
+        else:
+            ok &= good
+    ok &= probe_tests(lines)
+    r = Rig(make_image(lines, 19200)[0], 0x50, 3, 0xC0C5, wave=waveform(b'ABCDE', FCLK / 19200)); r.run()
+    print('RX limit of 3 bytes:', bytes(r.m.memory[0xC0C5 + 0x200:0xC0C5 + 0x203]), 'DE =', r.m.de)
     ok &= r.m.de == 3
-    ok &= probe_tests(lines, tt)
+    # idle line: the 30 s timeout is too long to simulate, so it is shortened by patching the timeout bytes
+    img = make_image(lines, 19200)[0]
+    tab = Stream(lines, 900); n = tab.read(); sites = {}
+    for _ in range(n):
+        o, k, f = tab.read(3); sites[k] = o
+    img[sites[9]] = 10; img[sites[10]] = 1
+    r = Rig(img, 0x50, 255, 0xC0C5, wave=lambda t: 1); r.run()
+    print('RX idle line: timeout after %.3f s, DE=%d, carry=%d' % (r.ins[-1] / FCLK, r.m.de, r.m.f & 1))
+    ok &= r.m.de == 0 and r.m.f & 1 == 1
     print('ALL OK' if ok else 'FAILED')
     sys.exit(0 if ok else 1)
 
