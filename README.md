@@ -60,6 +60,9 @@ used. According to the PC-1600 schematic and the Technical Reference the levels 
 | `wav/uart1600.wav` | tape recording of the program for `LOAD "CAS:UART1600"` (about 5 minutes) |
 | `tools/pc1600_bas2wav.py` | BASIC text -> tape recording (WAV) and decoder check (from the PC-1600 game repository); lines must not exceed 80 characters |
 | `Basic/pc1600_memfinder.txt`, `wav/pc1600_memfinder.wav` | diagnostic program: finds the BASIC program in the RAM and the pointers in the work area and sends a report through UART1600 (for a future Saver/Loader of BASIC programs) |
+| `Basic/uart1600_sl.txt` | **Saver/Loader**: BASIC installer (about 50 lines) of the machine-language SAVE and LOAD of BASIC programs through the UART, fixed 19200 bps |
+| `asm/uart1600_sl.asm` | source of SAVE and LOAD (position independent, no buffer) |
+| `tools/build_sl.py`, `tools/verify_sl.py` | makes `Basic/uart1600_sl.txt`; emulator test of SAVE and LOAD |
 | `asm/uart1600.asm` | source of SEROUT, SERIN and PROBE (assembler: `z80asm`) with all comments |
 | `tools/build_loader.py` | makes `Basic/uart1600.txt` from `asm/uart1600.asm` (needs `z80asm`) |
 | `tools/verify_listing.py` | emulator test of the loader listing (needs `pip install z80` and `z80asm`) |
@@ -227,6 +230,36 @@ and the sender is read correctly by an ideal receiver between about -4 % and +4 
 | `CALL` register contract of the PC-1600 BASIC | the manual: the numeric variable goes in DE, and comes back in DE if the carry is set. SERIN and PROBE set the carry; SEROUT clears it and keeps AF, BC, DE and HL; SERIN keeps AF, BC and HL. Alternate registers and IX, IY are not used |
 | The machine-language area at `C0C5H` is at least 767 bytes long | to be checked with `STATUS 2` / `POKE` (see How to use); if it is shorter, the code overwrites the BASIC program |
 | Whether memory reads of `8000H`-`FFFFH` have side effects | assumed not (reads of ordinary RAM, ROM and card windows) |
+
+## Saver/Loader of BASIC programs (UART1600 SL, 19200 bps)
+
+A separate, small program (like the SAVER/LOADER of the PC-1500): it puts two machine-language routines in the RAM that
+**send a BASIC program to the terminal (TeraTerm) and load it back**, as a binary file. It needs UART1600 only for the wiring
+(pins 27, 29, ground) and the same TTL partner, not as software: SL has its own bit routines, fixed at **19200 bps 8N1**.
+
+1. Install it: type in or send `Basic/uart1600_sl.txt` (about 50 lines, `DATA` with a checksum), `RUN`, ENTER for the ML address
+   (49349 = `C0C5H`; the code is about 370 bytes and **replaces UART1600 if it is at the same address**: give another address,
+   e.g. 50200, when both are wanted). The program checks the pointers of the BASIC (`FE3CH`, `FE3FH`) and shows the addresses:
+   `SAVE: CALL A,X` and `LOAD: CALL A+176,X`. Then `NEW` (without an address) deletes the installer; the routines stay.
+2. **Save** (PC-1600 to the terminal): in TeraTerm start the log as a **binary** file (File, Log..., tick "Binary"), the terminal at 19200 8N1,
+   then type as a direct command (RUN mode) `X=0 : CALL 49349,X` [ENTER]. The program is sent as it lies in the memory (the tokens),
+   followed by one checksum byte. `X` = 1 when it is done. Stop the log. The name of the file is yours; the text of the first `REM`
+   line is inside the file and can help (a hex viewer shows it).
+3. **Load** (terminal to the PC-1600): type `NEW` (the memory must be empty or hold the program that is to be replaced), then `X=0 : CALL 49525,X`
+   (`A+176`) [ENTER] and within 30 s send the file: File, Send file..., tick **"Binary"**, transmit delay 0. The end of the file is
+   0.5 s without a byte. `X`: 1 = loaded and the end pointer set, 2 = checksum error, 3 = nothing received, 4 = does not fit.
+   Then `LIST` or `RUN`.
+- **A program (BASIC) in memory is replaced**, not merged: the new program starts where the old one started. After an error (2 or 4)
+  the memory holds a part of a program: do `NEW` (and, if the BASIC misbehaves, ALL RESET, which erases the memory). **Keep a copy of
+  the programs on tape before the first try.**
+- Not for use inside a program: it replaces the program that is running. Type it as a direct command.
+- Limits: a program must lie in one 16 KB window (module `8000H`-`BFFFH`, or the internal RAM) and be shorter than 16 KB.
+  The addresses of the BASIC pointers (`FE3CH` = start, `FE3FH` = end, 3 bytes each, the first two bytes the address) were found with
+  `Basic/pc1600_memfinder.txt` on one machine; whether the end pointer is the only thing that has to be set when a program is
+  loaded is **not confirmed yet**: the emulator test uses a memory with these two pointers. If `LIST` shows garbage after a load, tell it.
+- The emulator test (`tools/verify_sl.py`): SAVE gives exactly the bytes of the program plus the checksum; LOAD takes the stream
+  without any gap at all phases and +-3 % of the speed, keeps the registers of the BASIC (also the alternate ones), and
+  reports the errors above.
 
 ## Rebuilding
 
