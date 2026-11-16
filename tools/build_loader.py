@@ -106,7 +106,7 @@ def build():
 
     def add(n, t):
         L.append((n, t))
-    add(10, 'REM UART1600 V2.3: SOFTWARE UART PC-1600 (MODE 0), 300-38400 BPS, WITH TEST')
+    add(10, 'REM UART1600 V2.4: SOFTWARE UART PC-1600 (MODE 0), 300-38400 BPS, WITH TEST')
     add(20, 'REM TX=PC7 (CN9 PIN 29), RX=PB2 (CN9 PIN 27), CMOS LEVELS, GND = PINS 52-54')
     add(30, 'REM CODE+BUFFERS = 767 BYTES FROM A (DEFAULT 49349=&C0C5: ML AREA OF RAM)')
     add(40, 'CLEAR:DIM TT(21):DIM Z$(0)*26:WAIT 0:BEEP OFF')
@@ -220,8 +220,8 @@ def build():
         (4000, 'REM --- TEST MENU: KEYS 1 TX, 2 RX, 3 STREAM OF 55H, 4 NEW SPEED, 0 END ---'),
         (4005, 'S=A:I=A+%d:T=A+256:R=A+512:L=A+511' % labF['SERIN']),
         (4010, 'PRINT "1TX 2RX 3U 4BAUD 0END"'),
-        (4011, 'IF INKEY$<>"" THEN GOTO 4011'),
-        (4012, 'Y$=INKEY$:IF Y$="" THEN GOTO 4012'),
+        (4011, 'Y$=INKEY$:IF Y$>="0" AND Y$<="9" THEN GOTO 4011'),
+        (4012, 'Y$=INKEY$:IF Y$<"0" OR Y$>"4" THEN GOTO 4012'),
         (4020, 'IF Y$="1" THEN GOTO 4100'),
         (4030, 'IF Y$="2" THEN GOTO 4400'),
         (4040, 'IF Y$="3" THEN GOTO 4300'),
@@ -238,11 +238,12 @@ def build():
         (4400, 'REM --- RX: PACKETS. HOLD A KEY (UP TO 3 S): BACK TO THE MENU ---'),
         (4402, 'K=%d:IF TT(19)=1 THEN LET K=%d' % (labF['si_t1f'] + 1, labS['si_t1f'] + 1)),
         (4404, 'PRINT "ECHO BACK? 1=YES 0=NO"'),
-        (4406, 'Y$=INKEY$:IF Y$="" THEN GOTO 4406'),
+        (4406, 'Y$=INKEY$:IF Y$<"0" OR Y$>"1" THEN GOTO 4406'),
         (4408, 'E=0:IF Y$="1" THEN LET E=1'),
         (4410, 'POKE A+K,3:PRINT "WAITING (HOLD KEY=MENU)"'),
         (4430, 'N=0:CALL I,N:D=PEEK(L)'),
-        (4440, 'IF D=0 AND INKEY$<>"" THEN GOTO 4590'),
+        (4440, 'IF D=0 THEN LET Y$=INKEY$'),
+        (4442, 'IF D=0 AND Y$<>"" AND Y$<>CHR$(0) THEN GOTO 4590'),
         (4445, 'IF D=0 THEN GOTO 4430'),
         (4450, 'PRINT "RX ";D;" BYTES:"'),
         (4460, 'IF E<>1 THEN GOTO 4500'),
