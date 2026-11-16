@@ -5,7 +5,7 @@
 ; The code contains no CALLs and no absolute jumps: it can be loaded at any address. The only
 ; absolute operands are the buffer addresses TXPTR and RXPTR, which the BASIC loader patches.
 ; Layout (offsets from the start of the code):
-;   +000 SEROUT   +050 SERIN   +100 TXBUF (255 bytes)   +1FF RXLEN   +200 RXBUF (255 bytes); PROBE (loader only) at +200
+;   +000 SEROUT   +054 SERIN   +100 TXBUF (255 bytes)   +1FF RXLEN   +200 RXBUF (255 bytes); PROBE (loader only) at +200
 OPC: equ 0x18
 DDB: equ 0x1D
 OPB: equ 0x1F
@@ -18,6 +18,8 @@ SEROUT:
  push bc
  push de
  push hl
+ in a,(OPC)           ; the state of OPC (PC7 = TX pin, buzzer) before the transmission
+ push af
  ld a,e
  or a
  jr nz,so_n
@@ -62,6 +64,9 @@ so_pad:
  djnz so_loop
  dec e
  jr nz,so_byte
+ pop af
+so_rs:
+ out (OPC),a         ; PATCH: restores OPC (D3 18); two NOPs (00 00) leave OPC as the last bit left it
  ei
  pop hl
  pop de
@@ -70,13 +75,13 @@ so_pad:
  or a                 ; carry clear
  ret
 so_end:
- defs 0x50-$
+ defs 0x54-$
 
 ;---------------------------------------------------------------- SERIN
-; CALL base+50H,m : receives up to m (1..255, 0 = 255) bytes into RXBUF.
+; CALL base+54H,m : receives up to m (1..255, 0 = 255) bytes into RXBUF.
 ; Waits about 30 s for the first byte, ends when no byte arrives within about 0.5 s.
 ; Returns DE = number of bytes (also in RXLEN = RXBUF-1), carry set.
- org 0x50
+ org 0x54
 SERIN:
  push af
  push bc

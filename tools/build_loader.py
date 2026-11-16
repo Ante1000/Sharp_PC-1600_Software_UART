@@ -75,6 +75,7 @@ def patch_table(lab, slow):
     if slow:
         for l in ('so_dnm', 'si_hnm', 'si_dnm', 'si_dn2m'):
             add(l, 13, 1, 2)             # LD B,M follows the EXX
+    add('so_rs', 21, 211); add('so_rs', 21, 24)    # restore OPC after SEROUT: OUT (18H),A or two NOPs
     add('so_tp', 14); add('so_tp', 15, 1, 2)      # TXPTR low, high (TT(14), TT(15))
     add('si_rp', 16); add('si_rp', 17, 1, 2)      # RXPTR low, high (TT(16), TT(17))
     return t
@@ -100,15 +101,15 @@ def build():
     codeF, labF = assemble(False)
     codeS, labS = assemble(True)
     assert labF['PROBE'] == labS['PROBE'] and codeF[labF['PROBE']:labF['pr_fin']] == codeS[labS['PROBE']:labS['pr_fin']]
-    assert labS['si_fin'] <= 0xFA, 'slow SERIN reaches the description at +250'
+    assert labS['so_end'] <= labS['SERIN'] and labS['si_fin'] <= 0xFA, 'slow SERIN reaches the description at +250'
     L = []
 
     def add(n, t):
         L.append((n, t))
-    add(10, 'REM UART1600 V2.1: SOFTWARE UART PC-1600 (MODE 0), 300-38400 BPS, WITH TEST')
+    add(10, 'REM UART1600 V2.2: SOFTWARE UART PC-1600 (MODE 0), 300-38400 BPS, WITH TEST')
     add(20, 'REM TX=PC7 (CN9 PIN 29), RX=PB2 (CN9 PIN 27), CMOS LEVELS, GND = PINS 52-54')
     add(30, 'REM CODE+BUFFERS = 767 BYTES FROM A (DEFAULT 49349=&C0C5: ML AREA OF RAM)')
-    add(40, 'CLEAR:DIM TT(20):DIM Z$(0)*26:WAIT 0:BEEP OFF')
+    add(40, 'CLEAR:DIM TT(21):DIM Z$(0)*26:WAIT 0:BEEP OFF')
     add(100, 'REM --- SPEED (BD) ---')
     add(105, 'BD=0:INPUT "BAUD 300-38400 (ENTER=19200) ";BD')
     add(106, 'IF BD=0 THEN LET BD=19200')
@@ -215,12 +216,13 @@ def build():
         add(n, 'DATA %d' % tot)
     menu = [
         (4000, 'REM --- TEST MENU: TX, RX, STREAM OF 55H, NEW SPEED ---'),
-        (4005, 'S=A:I=A+80:T=A+256:R=A+512:L=A+511'),
-        (4010, 'Y$="":INPUT "1TX 2RX 3U 4BAUD 0END ";Y$'),
+        (4005, 'S=A:I=A+%d:T=A+256:R=A+512:L=A+511' % labF['SERIN']),
+        (4010, 'Y$="":INPUT "1TX 2RX 3U 4BD 5OPC 0END ";Y$'),
         (4020, 'IF Y$="1" THEN GOTO 4100'),
         (4030, 'IF Y$="2" THEN GOTO 4400'),
         (4040, 'IF Y$="3" THEN GOTO 4300'),
         (4050, 'IF Y$="4" THEN GOTO 100'),
+        (4055, 'IF Y$="5" THEN GOTO 4600'),
         (4060, 'IF Y$="0" THEN END'),
         (4070, 'GOTO 4010'),
         (4100, 'REM --- TX: HELLO PC-1600 CR LF ---'),
@@ -247,7 +249,15 @@ def build():
         (4550, 'IF LEN(Z$)>=26 THEN PRINT Z$:Z$=""'),
         (4560, 'NEXT J'),
         (4570, 'IF LEN(Z$)>0 THEN PRINT Z$'),
-        (4580, 'GOTO 4420')]
+        (4580, 'GOTO 4420'),
+        (4600, 'REM --- OPC TEST: CAN THE BUZZER STATE BE RESTORED AFTER SEROUT? ---'),
+        (4610, 'X=INP(&18):Y=X+128:IF X>127 THEN LET Y=X-128'),
+        (4620, 'OUT &18,Y:Z=INP(&18):OUT &18,X'),
+        (4630, 'TT(21)=0:IF Z=Y THEN LET TT(21)=1'),
+        (4640, 'PRINT "OPC ";X;" WROTE ";Y;" READ ";Z'),
+        (4650, 'IF TT(21)=1 THEN PRINT "READABLE: RESTORE ON"'),
+        (4660, 'IF TT(21)=0 THEN PRINT "NOT READABLE: RESTORE OFF"'),
+        (4670, 'PRINT "PRESS 4 TO APPLY":GOTO 4010')]
     L += menu
     L.sort()
     # no two-letter simple variables (the PC-1600 has A-Z only): BD, SL, TU live in the array TT()

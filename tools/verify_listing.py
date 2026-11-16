@@ -13,6 +13,7 @@ import z80
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FCLK = 3.0e6            # measured on a real PC-1600: about 2.9-3.06 MHz (not 3.58 MHz)
+SERIN = 0x54            # offset of SERIN in the code
 FRAME = 100000          # the emulator's run() returns every 100000 T-states
 
 
@@ -69,7 +70,7 @@ def floor(x):
 def loader_tt(bd):
     """lines 105-192 of the loader: returns (TT dict, slow, turbo)"""
     assert 300 <= bd <= 38400 and not (28800 < bd < 38400)
-    tt = {7: 0, 8: 0, 9: 0, 10: 30, 11: 130, 12: 1, 13: 1}
+    tt = {7: 0, 8: 0, 9: 0, 10: 30, 11: 130, 12: 1, 13: 1, 21: 0}
     b = 3000000.0 / bd
     sl = 1 if bd < 750 else 0
     tu = 1 if bd == 38400 else 0
@@ -98,9 +99,10 @@ def loader_tt(bd):
     return tt, sl, tu
 
 
-def make_image(lines, bd, A=49349, P=0xC0C5):
+def make_image(lines, bd, A=49349, P=0xC0C5, restore=0):
     """the code as the loader builds it for the speed bd"""
     tt, sl, tu = loader_tt(bd)
+    tt[21] = restore                                     # menu 5 of the loader sets TT(21)
     for k, w in ((14, P + 256), (16, P + 512)):         # lines 430 and 440 of the loader
         tt[k] = w & 255; tt[k + 1] = (w >> 8) & 255
     for k in (1, 3, 5):
@@ -139,6 +141,7 @@ class Rig:
         self.off = 0; self.last = 0
         self.outs = []; self.ins = []
         self.wave = wave; self.wait = wait
+        self.opc = 0x5A                      # the OPC register: readable, returns the last value written
         m.set_output_callback(self.on_out); m.set_input_callback(self.on_in)
 
     def now(self):
@@ -150,12 +153,15 @@ class Rig:
 
     def on_out(self, a, v):
         if a & 255 == 0x18:
+            self.opc = v
             self.outs.append((self.now(), v))
 
     def on_in(self, a):
         if a & 255 == 0x1F:
             t = self.now(); self.ins.append(t)
             return 0x04 if self.wave(t) else 0
+        if a & 255 == 0x18:
+            return self.opc
         return 0xFF
 
     def run(self, limit=80_000_000):
@@ -247,6 +253,20 @@ def probe_tests(lines):
     return good
 
 
+def opc_test(lines):
+    """SEROUT with TT(21) = 1 puts OPC (the buzzer / TX register) back to the value it had before"""
+    ok = True
+    for bd in (300, 2400, 19200, 38400):
+        for rs in (1, 0):
+            img = make_image(lines, bd, restore=rs)[0]
+            r = Rig(img, 0, 3, 0xC0C5, txdata=b'ABC'); r.opc = 0x5A; r.run()
+            want = 0x5A if rs else 0x80
+            good = r.opc == want and r.m.sp == 0xF000
+            print('OPC after SEROUT, %5d bps, TT(21)=%d: %02X (expected %02X) %s' % (bd, rs, r.opc, want, 'ok' if good else 'FAILED'))
+            ok &= good
+    return ok
+
+
 def check_speed(lines, bd, quick=False):
     img, tt, sl, tu = make_image(lines, bd)
     P = 0xC0C5
@@ -265,7 +285,7 @@ def check_speed(lines, bd, quick=False):
     rx = []; tot = 0; good = 0
     for ph in ((0, 20, 40) if quick else range(0, 46, 5)):
         for gap in (0, 2):
-            r = Rig(img, 0x50, 255, P, wave=waveform(data[:20], bit, phase=ph, gap=gap))
+            r = Rig(img, SERIN, 255, P, wave=waveform(data[:20], bit, phase=ph, gap=gap))
             r.m.alt_bc = 0x1234; r.m.alt_de = 0x5678; r.m.alt_hl = 0x9ABC; r.m.bc = 0x0F0E; r.m.hl = 0x2468
             r.run()
             regs_ok &= (r.m.alt_bc, r.m.alt_de, r.m.alt_hl, r.m.hl) == (0x1234, 0x5678, 0x9ABC, 0x2468)
@@ -275,7 +295,7 @@ def check_speed(lines, bd, quick=False):
     for m in (0.96, 0.98, 1.0, 1.02, 1.04):
         o = t = 0
         for ph in (0, 15, 30):
-            r = Rig(img, 0x50, 255, P, wave=waveform(data[:20], bit * m, phase=ph, gap=0)); r.run()
+            r = Rig(img, SERIN, 255, P, wave=waveform(data[:20], bit * m, phase=ph, gap=0)); r.run()
             n = r.m.memory[P + 0x1FF]
             o += bytes(r.m.memory[P + 0x200:P + 0x200 + n]) == data[:20]; t += 1
         tol.append('x%.2f:%d/%d' % (m, o, t))
@@ -309,7 +329,8 @@ def main():
         else:
             ok &= good
     ok &= probe_tests(lines)
-    r = Rig(make_image(lines, 19200)[0], 0x50, 3, 0xC0C5, wave=waveform(b'ABCDE', FCLK / 19200)); r.run()
+    ok &= opc_test(lines)
+    r = Rig(make_image(lines, 19200)[0], SERIN, 3, 0xC0C5, wave=waveform(b'ABCDE', FCLK / 19200)); r.run()
     print('RX limit of 3 bytes:', bytes(r.m.memory[0xC0C5 + 0x200:0xC0C5 + 0x203]), 'DE =', r.m.de)
     ok &= r.m.de == 3
     # idle line: the 30 s timeout is too long to simulate, so it is shortened by patching the timeout bytes
@@ -318,7 +339,7 @@ def main():
     for _ in range(n):
         o, k, f = tab.read(3); sites[k] = o
     img[sites[9]] = 10; img[sites[10]] = 1
-    r = Rig(img, 0x50, 255, 0xC0C5, wave=lambda t: 1); r.run()
+    r = Rig(img, SERIN, 255, 0xC0C5, wave=lambda t: 1); r.run()
     print('RX idle line: timeout after %.3f s, DE=%d, carry=%d' % (r.ins[-1] / FCLK, r.m.de, r.m.f & 1))
     ok &= r.m.de == 0 and r.m.f & 1 == 1
     print('ALL OK' if ok else 'FAILED')

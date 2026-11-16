@@ -77,7 +77,7 @@ used. According to the PC-1600 schematic and the Technical Reference the levels 
    `POKE` does nothing there. `NEW <address>` gave errors 25 and 26 on that machine (25: invalid address, 26: invalid mode:
    wrong mode or not in RUN mode), see below.
 2. Load `Basic/uart1600.txt`: from tape (CE-1600P, EAR input; MODE 0: `LOAD "CAS:UART1600"`, play `wav/uart1600.wav`), through the serial port, or type it in. The recordings were only checked with the decoder of the tool, not on a real PC-1600.
-   The listing has about 150 lines of at most 80 characters; the code is in `DATA` lines and has a checksum.
+   The listing has about 200 lines of at most 80 characters; the code is in `DATA` lines and has a checksum.
 3. `RUN`. The loader asks `BAUD 300-38400 (ENTER=19200)` (any value from 300 to 28800, or 38400; ENTER = 19200) and then
    `ML ADDRESS (ENTER=49349)`: ENTER takes &C0C5. It then
    - stores the code with `POKE`s and checks the `DATA` checksum (`DATA ERROR` = a typing or transfer error),
@@ -86,11 +86,13 @@ used. According to the PC-1600 schematic and the Technical Reference the levels 
    - checks that the code reads the buffer where BASIC wrote its marker, and shows
      `UART1600 READY, <speed> BPS`, the `CALL` addresses and the buffer addresses.
 4. Connect the other device as shown above.
-5. After the installation the **test menu** appears (`1TX 2RX 3U 4BAUD 0END`):
+5. After the installation the **test menu** appears (`1TX 2RX 3U 4BD 5OPC 0END`):
    - `1` sends `HELLO PC-1600` with CR LF to the terminal,
    - `2` receives packets and shows them (with `ECHO (1=YES)` it sends every packet back); after 30 s without data it
      returns to the menu,
    - `3` sends 255 bytes of 55H again and again (a square wave, one bit per half period, for an oscilloscope; stop with BREAK),
+   - `5` tests whether the register OPC (port 18H: the TX pin 29 and the buzzer) can be read back; if so, it switches the
+     **restore of OPC** on (see below); press `4` to apply it,
    - `4` goes back to the question about the speed and installs the code again for the new speed (the ML address is not asked
      again), then the menu appears again,
    - `0` ends the program; the routines stay in memory.
@@ -106,7 +108,7 @@ Addresses for the default start address `A` = 49349 (the loader shows them for y
 | Command | Action |
 |---|---|
 | `CALL A, N` | **send** `N` bytes (1 to 255) from the TX buffer |
-| `CALL A+80, N` | **receive** at most `N` bytes (0 = 255) into the RX buffer; the number received is returned in `N` |
+| `CALL A+84, N` | **receive** at most `N` bytes (0 = 255) into the RX buffer; the number received is returned in `N` |
 
 | Address | Contents |
 |---|---|
@@ -136,9 +138,20 @@ Example (text to a terminal):
 Example (receive a packet and print it):
 
 ```
-10 A=49349 : N=0 : CALL A+80, N
+10 A=49349 : N=0 : CALL A+84, N
 20 FOR J=0 TO N-1 : PRINT CHR$(PEEK(A+512+J)); : NEXT J
 ```
+
+## The buzzer and the state of OPC after SEROUT
+
+The TX pin (PC7, bit 7 of the register OPC, port 18H) shares the line of the buzzer. SEROUT writes the whole OPC register
+(bit 7 = the bit, the other bits 0) and leaves it with the stop bit, so after a transmission the register is not what it was before.
+The code can **restore OPC**: SEROUT reads OPC at the start (`in a,(18H)`), keeps the value and writes it back at the end, after the
+last stop bit, so the buzzer and the other bits of port C are as they were before the call. This works only if OPC can be read back,
+which is not known for the PC-1600, so it is **off by default** (`TT(21)` = 0: the restoring `OUT` is patched into two NOPs).
+Menu item `5` of the program writes a changed value to OPC, reads it back and restores it: if the value comes back, it sets
+`TT(21)` = 1 (restore on); press `4` to install the code again with the restore. The emulator test checks that OPC has its old value
+after the call (`tools/verify_listing.py`, simulated readable register).
 
 ## How the loader finds the addresses
 
