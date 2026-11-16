@@ -284,6 +284,7 @@ pr_none:
 pr_end:
  pop bc
  pop hl
+ ei                   ; BASIC may run a CALL with the interrupts off: the keyboard (INKEY$) needs them
  scf                  ; carry set: DE is returned to BASIC
  ret
 pr_fin:
