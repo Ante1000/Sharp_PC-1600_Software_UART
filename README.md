@@ -59,6 +59,7 @@ used. According to the PC-1600 schematic and the Technical Reference the levels 
 | `Basic/uart1600.txt` | **UART1600**: one BASIC program: installs SEROUT/SERIN in RAM (speed 300-38400 bps), finds the right addresses, patches the timing, and has a TX (`HELLO PC-1600`) and RX (with echo) test menu, with a change of speed |
 | `wav/uart1600.wav` | tape recording of the program for `LOAD "CAS:UART1600"` (about 5 minutes) |
 | `tools/pc1600_bas2wav.py` | BASIC text -> tape recording (WAV) and decoder check (from the PC-1600 game repository); lines must not exceed 80 characters |
+| `Basic/pc1600_memfinder.txt`, `wav/pc1600_memfinder.wav` | diagnostic program: finds the BASIC program in the RAM and the pointers in the work area and sends a report through UART1600 (for a future Saver/Loader of BASIC programs) |
 | `asm/uart1600.asm` | source of SEROUT, SERIN and PROBE (assembler: `z80asm`) with all comments |
 | `tools/build_loader.py` | makes `Basic/uart1600.txt` from `asm/uart1600.asm` (needs `z80asm`) |
 | `tools/verify_listing.py` | emulator test of the loader listing (needs `pip install z80` and `z80asm`) |
