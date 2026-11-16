@@ -89,8 +89,8 @@ used. According to the PC-1600 schematic and the Technical Reference the levels 
 5. After the installation the **test menu** appears (`1TX 2RX 3U 4BAUD 0END`); press the key `0` ... `4`, no ENTER is needed:
    - `1` sends `HELLO PC-1600` with CR LF to the terminal,
    - `2` receives packets and shows them (it asks `ECHO BACK? 1=YES 0=NO`; with 1 it sends every packet back). The wait for a
-     packet is 3 s: to **leave the RX test and go back to the menu, hold any key** until the menu appears (up to 3 s; the keyboard
-     is not scanned while SERIN waits). **The test shows at most 16 received bytes per packet, e.g. `RX 16 BYTES` when 20 bytes
+     packet is 3 s: to **leave the RX test and go back to the menu, hold the key `0`** until the menu appears (up to 3 s; the keyboard
+     is not scanned while SERIN waits). The menu reads the keys with `INKEY$` in a `FOR` loop, as the game does. **The test shows at most 16 received bytes per packet, e.g. `RX 16 BYTES` when 20 bytes
      were sent from a terminal** (observed on the PC-1600; the cause has not been investigated yet, it does not matter for the test),
    - `3` sends 255 bytes of 55H again and again (a square wave, one bit per half period, for an oscilloscope; stop with BREAK),
    - `4` goes back to the question about the speed and installs the code again for the new speed (the ML address is not asked

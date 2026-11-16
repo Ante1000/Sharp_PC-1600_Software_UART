@@ -106,7 +106,7 @@ def build():
 
     def add(n, t):
         L.append((n, t))
-    add(10, 'REM UART1600 V2.4: SOFTWARE UART PC-1600 (MODE 0), 300-38400 BPS, WITH TEST')
+    add(10, 'REM UART1600 V2.5: SOFTWARE UART PC-1600 (MODE 0), 300-38400 BPS, WITH TEST')
     add(20, 'REM TX=PC7 (CN9 PIN 29), RX=PB2 (CN9 PIN 27), CMOS LEVELS, GND = PINS 52-54')
     add(30, 'REM CODE+BUFFERS = 767 BYTES FROM A (DEFAULT 49349=&C0C5: ML AREA OF RAM)')
     add(40, 'CLEAR:DIM TT(21):DIM Z$(0)*26:WAIT 0:BEEP OFF')
@@ -169,10 +169,10 @@ def build():
     add(465, 'READ N:FOR S=1 TO N:READ O,K,L:POKE A+O,TT(K)*L:NEXT S')
     add(470, 'IF TU=1 THEN GOSUB 800')
     add(490, 'V=INT(BD/256):POKE A+250,85,P-256*INT(P/256),INT(P/256),BD-256*V,V')
-    add(500, 'CLS:PRINT "UART1600 READY, ";BD;" BPS"')
-    add(510, 'PRINT "SEROUT: CALL ";A;",N"')
-    add(520, 'PRINT "SERIN: CALL ";A+%d;",N"' % labF['SERIN'])
-    add(530, 'PRINT "TX BUF ";A+256;" RX BUF ";A+512')
+    add(500, 'CLS:PRINT "UART1600 OK ";BD;" BPS"')
+    add(510, 'PRINT "SEROUT CALL ";A;",N"')
+    add(520, 'PRINT "SERIN CALL ";A+%d;",N"' % labF['SERIN'])
+    add(530, 'PRINT "TX ";A+256;" RX ";A+512')
     add(540, 'GOTO 4000')
     add(600, 'REM SUB: READ SIGNATURE (8 PAIRS VALUE,OFFSET; 2 SITES), SEARCH. RESULT Z')
     add(610, 'Q=A+512:Z=0')
@@ -220,13 +220,18 @@ def build():
         (4000, 'REM --- TEST MENU: KEYS 1 TX, 2 RX, 3 STREAM OF 55H, 4 NEW SPEED, 0 END ---'),
         (4005, 'S=A:I=A+%d:T=A+256:R=A+512:L=A+511' % labF['SERIN']),
         (4010, 'PRINT "1TX 2RX 3U 4BAUD 0END"'),
-        (4011, 'Y$=INKEY$:IF Y$>="0" AND Y$<="9" THEN GOTO 4011'),
-        (4012, 'Y$=INKEY$:IF Y$<"0" OR Y$>"4" THEN GOTO 4012'),
-        (4020, 'IF Y$="1" THEN GOTO 4100'),
-        (4030, 'IF Y$="2" THEN GOTO 4400'),
-        (4040, 'IF Y$="3" THEN GOTO 4300'),
-        (4050, 'IF Y$="4" THEN GOTO 100'),
-        (4060, 'IF Y$="0" THEN END'),
+        (4012, 'K=0:FOR G=1 TO 40:Y$=INKEY$'),
+        (4013, 'IF Y$="1" THEN K=1:G=40'),
+        (4014, 'IF Y$="2" THEN K=2:G=40'),
+        (4015, 'IF Y$="3" THEN K=3:G=40'),
+        (4016, 'IF Y$="4" THEN K=4:G=40'),
+        (4017, 'IF Y$="0" THEN K=9:G=40'),
+        (4018, 'NEXT G'),
+        (4020, 'IF K=1 THEN GOTO 4100'),
+        (4030, 'IF K=2 THEN GOTO 4400'),
+        (4040, 'IF K=3 THEN GOTO 4300'),
+        (4050, 'IF K=4 THEN GOTO 100'),
+        (4060, 'IF K=9 THEN END'),
         (4070, 'GOTO 4012'),
         (4100, 'REM --- TX: HELLO PC-1600 CR LF ---'),
         (4110, 'POKE T,72,69,76,76,79,32,80,67,45,49,54,48,48,13,10'),
@@ -235,15 +240,17 @@ def build():
         (4310, 'FOR J=0 TO 254:POKE T+J,85:NEXT J'),
         (4320, 'PRINT "255 X 55H, STOP: BREAK"'),
         (4330, 'N=255:CALL S,N:GOTO 4330'),
-        (4400, 'REM --- RX: PACKETS. HOLD A KEY (UP TO 3 S): BACK TO THE MENU ---'),
-        (4402, 'K=%d:IF TT(19)=1 THEN LET K=%d' % (labF['si_t1f'] + 1, labS['si_t1f'] + 1)),
+        (4400, 'REM --- RX: PACKETS. HOLD KEY 0 (UP TO 3 S): BACK TO THE MENU ---'),
+        (4402, 'F=%d:IF TT(19)=1 THEN LET F=%d' % (labF['si_t1f'] + 1, labS['si_t1f'] + 1)),
         (4404, 'PRINT "ECHO BACK? 1=YES 0=NO"'),
-        (4406, 'Y$=INKEY$:IF Y$<"0" OR Y$>"1" THEN GOTO 4406'),
-        (4408, 'E=0:IF Y$="1" THEN LET E=1'),
-        (4410, 'POKE A+K,3:PRINT "WAITING (HOLD KEY=MENU)"'),
+        (4406, 'Y$=INKEY$'),
+        (4407, 'IF Y$="1" THEN E=1:GOTO 4410'),
+        (4408, 'IF Y$="0" THEN E=0:GOTO 4410'),
+        (4409, 'GOTO 4406'),
+        (4410, 'POKE A+F,3:PRINT "WAITING (HOLD 0=MENU)"'),
         (4430, 'N=0:CALL I,N:D=PEEK(L)'),
-        (4440, 'IF D=0 THEN LET Y$=INKEY$'),
-        (4442, 'IF D=0 AND Y$<>"" AND Y$<>CHR$(0) THEN GOTO 4590'),
+        (4440, 'IF D=0 THEN Y$=INKEY$'),
+        (4442, 'IF D=0 AND Y$="0" THEN GOTO 4590'),
         (4445, 'IF D=0 THEN GOTO 4430'),
         (4450, 'PRINT "RX ";D;" BYTES:"'),
         (4460, 'IF E<>1 THEN GOTO 4500'),
@@ -258,7 +265,7 @@ def build():
         (4560, 'NEXT J'),
         (4570, 'IF LEN(Z$)>0 THEN PRINT Z$'),
         (4580, 'GOTO 4430'),
-        (4590, 'POKE A+K,TT(10):GOTO 4010')]
+        (4590, 'POKE A+F,TT(10):GOTO 4010')]
     L += menu
     L.sort()
     # no two-letter simple variables (the PC-1600 has A-Z only): BD, SL, TU live in the array TT()
