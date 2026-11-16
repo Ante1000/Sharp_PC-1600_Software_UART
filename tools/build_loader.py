@@ -105,10 +105,10 @@ def build():
 
     def add(n, t):
         L.append((n, t))
-    add(10, 'REM UART1600 V2.0: SOFTWARE UART FOR SHARP PC-1600 (MODE 0), 300-38400 BPS')
+    add(10, 'REM UART1600 V2.1: SOFTWARE UART PC-1600 (MODE 0), 300-38400 BPS, WITH TEST')
     add(20, 'REM TX=PC7 (CN9 PIN 29), RX=PB2 (CN9 PIN 27), CMOS LEVELS, GND = PINS 52-54')
     add(30, 'REM CODE+BUFFERS = 767 BYTES FROM A (DEFAULT 49349=&C0C5: ML AREA OF RAM)')
-    add(40, 'CLEAR:DIM TT(17):WAIT 0:BEEP OFF')
+    add(40, 'CLEAR:DIM TT(20):DIM Z$(0)*26:WAIT 0:BEEP OFF')
     add(100, 'REM --- SPEED (BD) ---')
     add(105, 'BD=0:INPUT "BAUD 300-38400 (ENTER=19200) ";BD')
     add(106, 'IF BD=0 THEN LET BD=19200')
@@ -120,26 +120,28 @@ def build():
     add(113, 'TT(11)=130:TT(12)=1:REM END OF PACKET: 45*256*TT(11)*TT(12) T = 0.5 S')
     add(114, 'TT(13)=1:REM REPEAT COUNT M OF THE DELAYS (SLOW CODE, UNDER 750 BPS)')
     add(120, 'B=3000000/BD:SL=0:TU=0:IF BD<750 THEN LET SL=1')
-    add(122, 'IF BD=38400 THEN LET TU=1:TT(1)=1:TT(2)=8:TT(3)=1:TT(4)=8:TT(5)=1:TT(6)=8')
-    add(123, 'IF TU=1 THEN GOTO 200')
+    add(121, 'IF BD=38400 THEN LET TU=1')
+    add(122, 'IF TU=1 THEN LET TT(1)=1:TT(2)=8:TT(3)=1:TT(4)=8:TT(5)=1:TT(6)=8')
+    add(123, 'IF TU=1 THEN GOTO 199')
     add(124, 'IF SL=1 THEN GOTO 150')
     add(125, 'REM FAST CODE: BIT = BASE + 16*N - 4*D T-STATES (TX 100, RX 99, CHECK 83)')
     add(130, 'Q=INT((B-100)/4+.5):GOSUB 190:TT(1)=U:TT(2)=V')
     add(131, 'Q=INT((B-99)/4+.5):GOSUB 190:TT(3)=U:TT(4)=V')
     add(132, 'Q=INT((B/2-105)/4+.5):GOSUB 190:TT(5)=U:TT(6)=V')
-    add(133, 'GOTO 200')
+    add(133, 'GOTO 199')
     add(150, 'REM SLOW CODE: BIT = BASE + M*(15+16*N) - 4*D T-STATES (D=4)')
     add(151, 'M=INT((B-92)/4000)+1:TT(13)=M:TT(2)=4:TT(4)=4:TT(6)=4')
     add(152, 'TT(1)=INT(((B-92)/M-15)/16+.5)')
     add(153, 'TT(3)=INT(((B-91)/M-15)/16+.5)')
     add(154, 'TT(5)=INT(((B/2-97)/M-15)/16+.5)')
-    add(155, 'GOTO 200')
+    add(155, 'GOTO 199')
     add(190, 'U=INT((Q+3)/4):IF U<1 THEN LET U=1')
     add(191, 'V=4*U-Q:IF V>8 THEN LET V=8')
     add(192, 'RETURN')
-    add(200, 'A=0:INPUT "ML ADDRESS (ENTER=49349) ";A')
+    add(199, 'IF A<>0 THEN GOTO 210')
+    add(200, 'INPUT "ML ADDRESS (ENTER=49349) ";A')
     add(201, 'IF A=0 THEN LET A=49349')
-    add(202, 'IF A<49152 OR A>64000 THEN GOTO 200')
+    add(202, 'IF A<49152 OR A>64000 THEN LET A=0:GOTO 200')
     add(210, 'REM --- STORE THE CODE: FAST OR SLOW SEROUT/SERIN, THEN PROBE ---')
     add(215, 'RESTORE 1000:IF SL=1 THEN RESTORE 2000')
     add(220, 'GOSUB 230')
@@ -163,12 +165,12 @@ def build():
     add(460, 'RESTORE 900:IF SL=1 THEN RESTORE 910')
     add(465, 'READ N:FOR S=1 TO N:READ O,K,L:POKE A+O,TT(K)*L:NEXT S')
     add(470, 'IF TU=1 THEN GOSUB 800')
-    add(490, 'POKE A+250,85,P-256*INT(P/256),INT(P/256),BD-256*INT(BD/256),INT(BD/256)')
+    add(490, 'V=INT(BD/256):POKE A+250,85,P-256*INT(P/256),INT(P/256),BD-256*V,V')
     add(500, 'CLS:PRINT "UART1600 READY, ";BD;" BPS"')
     add(510, 'PRINT "SEROUT: CALL ";A;",N"')
     add(520, 'PRINT "SERIN: CALL ";A+%d;",N"' % labF['SERIN'])
     add(530, 'PRINT "TX BUF ";A+256;" RX BUF ";A+512')
-    add(540, 'END')
+    add(540, 'GOTO 4000')
     add(600, 'REM SUB: READ SIGNATURE (8 PAIRS VALUE,OFFSET; 2 SITES), SEARCH. RESULT Z')
     add(610, 'Q=A+512:Z=0')
     add(620, 'FOR J=0 TO 7:READ B,O:POKE A+256+J,B:POKE A+O,B:NEXT J')
@@ -211,7 +213,55 @@ def build():
                 n = k
             n += 10
         add(n, 'DATA %d' % tot)
+    menu = [
+        (4000, 'REM --- TEST MENU: TX, RX, STREAM OF 55H, NEW SPEED ---'),
+        (4005, 'S=A:I=A+80:T=A+256:R=A+512:L=A+511'),
+        (4010, 'Y$="":INPUT "1TX 2RX 3U 4BAUD 0END ";Y$'),
+        (4020, 'IF Y$="1" THEN GOTO 4100'),
+        (4030, 'IF Y$="2" THEN GOTO 4400'),
+        (4040, 'IF Y$="3" THEN GOTO 4300'),
+        (4050, 'IF Y$="4" THEN GOTO 100'),
+        (4060, 'IF Y$="0" THEN END'),
+        (4070, 'GOTO 4010'),
+        (4100, 'REM --- TX: HELLO PC-1600 CR LF ---'),
+        (4110, 'POKE T,72,69,76,76,79,32,80,67,45,49,54,48,48,13,10'),
+        (4120, 'N=15:CALL S,N:PRINT "SENT 15 BYTES":GOTO 4010'),
+        (4300, 'REM --- 55H BYTES (SQUARE WAVE FOR A SCOPE), STOP: BREAK ---'),
+        (4310, 'FOR J=0 TO 254:POKE T+J,85:NEXT J'),
+        (4320, 'PRINT "255 X 55H, STOP: BREAK"'),
+        (4330, 'N=255:CALL S,N:GOTO 4330'),
+        (4400, 'REM --- RX: PACKETS (30 S WITHOUT DATA: BACK TO THE MENU) ---'),
+        (4410, 'E=0:INPUT "ECHO (1=YES) ";E'),
+        (4420, 'PRINT "WAITING FOR DATA..."'),
+        (4430, 'N=0:CALL I,N:D=PEEK(L)'),
+        (4440, 'IF D=0 THEN PRINT "TIMEOUT":GOTO 4010'),
+        (4450, 'PRINT "RX ";D;" BYTES:"'),
+        (4460, 'IF E<>1 THEN GOTO 4500'),
+        (4470, 'FOR J=0 TO D-1:POKE T+J,PEEK(R+J):NEXT J'),
+        (4480, 'M=D:CALL S,M'),
+        (4500, 'Z$=""'),
+        (4510, 'FOR J=0 TO D-1:C=PEEK(R+J)'),
+        (4520, 'IF C<32 THEN GOTO 4560'),
+        (4530, 'IF C>126 THEN LET C=46'),
+        (4540, 'Z$=Z$+CHR$(C)'),
+        (4550, 'IF LEN(Z$)>=26 THEN PRINT Z$:Z$=""'),
+        (4560, 'NEXT J'),
+        (4570, 'IF LEN(Z$)>0 THEN PRINT Z$'),
+        (4580, 'GOTO 4420')]
+    L += menu
     L.sort()
+    # no two-letter simple variables (the PC-1600 has A-Z only): BD, SL, TU live in the array TT()
+    names = {'BD': 'TT(18)', 'SL': 'TT(19)', 'TU': 'TT(20)'}
+
+    def fix(t):
+        if t.startswith(('DATA', 'REM')):
+            return t
+        code, sep, comment = t.partition(':REM')
+        parts = code.split('"')
+        for i in range(0, len(parts), 2):
+            parts[i] = re.sub(r'\b(BD|SL|TU)\b', lambda m: names[m.group(1)], parts[i])
+        return '"'.join(parts) + sep + comment
+    L = [(n, fix(t)) for n, t in L]
     nums = [n for n, _ in L]
     assert len(set(nums)) == len(nums), 'duplicate line numbers'
     text = ''.join('%d %s\n' % (n, t) for n, t in L)

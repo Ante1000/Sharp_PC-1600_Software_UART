@@ -57,10 +57,8 @@ used. According to the PC-1600 schematic and the Technical Reference the levels 
 
 | File | Contents |
 |---|---|
-| `Basic/uart1600.txt` | **UART1600 loader**: BASIC program that stores SEROUT/SERIN in RAM, finds the right addresses and patches the timing |
-| `Basic/uart1600_test.txt` | TX/RX test (run it after UART1600) |
-| `wav/uart1600.wav` | tape recording of the loader for `LOAD "CAS:UART1600"` (about 4 minutes) |
-| `wav/uart1600_test.wav` | tape recording of the test program for `LOAD "CAS:UARTTEST"` (about 1 minute) |
+| `Basic/uart1600.txt` | **UART1600**: one BASIC program: installs SEROUT/SERIN in RAM (speed 300-38400 bps), finds the right addresses, patches the timing, and has a **TX/RX test menu** |
+| `wav/uart1600.wav` | tape recording of the program for `LOAD "CAS:UART1600"` (about 5 minutes) |
 | `tools/pc1600_bas2wav.py` | BASIC text -> tape recording (WAV) and decoder check (from the PC-1600 game repository); lines must not exceed 80 characters |
 | `asm/uart1600.asm` | source of SEROUT, SERIN and PROBE (assembler: `z80asm`) with all comments |
 | `tools/build_loader.py` | makes `Basic/uart1600.txt` from `asm/uart1600.asm` (needs `z80asm`) |
@@ -88,12 +86,17 @@ used. According to the PC-1600 schematic and the Technical Reference the levels 
    - checks that the code reads the buffer where BASIC wrote its marker, and shows
      `UART1600 READY, <speed> BPS`, the `CALL` addresses and the buffer addresses.
 4. Connect the other device as shown above.
-5. To test, load
-   `Basic/uart1600_test.txt` and `RUN` it. Menu: `1` sends `HELLO PC-1600`, `2` receives packets (optional echo),
-   `3` sends 255 bytes of 55H again and again (a square wave of one bit per half period, for an oscilloscope).
+5. After the installation the **test menu** appears (`1TX 2RX 3U 4BAUD 0END`):
+   - `1` sends `HELLO PC-1600` with CR LF to the terminal,
+   - `2` receives packets and shows them (with `ECHO (1=YES)` it sends every packet back); after 30 s without data it
+     returns to the menu,
+   - `3` sends 255 bytes of 55H again and again (a square wave, one bit per half period, for an oscilloscope; stop with BREAK),
+   - `4` goes back to the question about the speed and installs the code again for the new speed (the ML address is not asked
+     again), then the menu appears again,
+   - `0` ends the program; the routines stay in memory.
 6. The routines stay in memory (RAM at `&C0C5`) for your own programs until the memory is cleared or something else writes there.
 
-Run the loader again to change a variable (speed, polarity). The routines are lost when the memory is cleared
+To change the speed or the polarity, use `4` in the menu, or run the program again with `RUN` (the variables in lines 111 to 114). The routines are lost when the memory is cleared
 (ALL RESET, or when something overwrites the area).
 
 ## Commands
