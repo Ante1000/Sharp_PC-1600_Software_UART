@@ -106,12 +106,13 @@ def build():
 
     def add(n, t):
         L.append((n, t))
-    add(10, 'REM UART1600 V2.2: SOFTWARE UART PC-1600 (MODE 0), 300-38400 BPS, WITH TEST')
+    add(10, 'REM UART1600 V2.3: SOFTWARE UART PC-1600 (MODE 0), 300-38400 BPS, WITH TEST')
     add(20, 'REM TX=PC7 (CN9 PIN 29), RX=PB2 (CN9 PIN 27), CMOS LEVELS, GND = PINS 52-54')
     add(30, 'REM CODE+BUFFERS = 767 BYTES FROM A (DEFAULT 49349=&C0C5: ML AREA OF RAM)')
     add(40, 'CLEAR:DIM TT(21):DIM Z$(0)*26:WAIT 0:BEEP OFF')
     add(100, 'REM --- SPEED (BD) ---')
-    add(105, 'BD=0:INPUT "BAUD 300-38400 (ENTER=19200) ";BD')
+    add(104, 'PRINT "BAUD 300-38400"')
+    add(105, 'BD=0:INPUT "ENTER=19200 ";BD')
     add(106, 'IF BD=0 THEN LET BD=19200')
     add(107, 'IF BD<300 OR BD>38400 THEN GOTO 105')
     add(108, 'IF BD>28800 AND BD<38400 THEN GOTO 105')
@@ -120,6 +121,7 @@ def build():
     add(112, 'TT(9)=0:TT(10)=30:REM FIRST BYTE: 45*256*256*TT(10) T = 30 S')
     add(113, 'TT(11)=130:TT(12)=1:REM END OF PACKET: 45*256*TT(11)*TT(12) T = 0.5 S')
     add(114, 'TT(13)=1:REM REPEAT COUNT M OF THE DELAYS (SLOW CODE, UNDER 750 BPS)')
+    add(115, 'TT(21)=1:REM 1 = SEROUT PUTS OPC (BUZZER, TX PIN) BACK AFTER SENDING')
     add(120, 'B=3000000/BD:SL=0:TU=0:IF BD<750 THEN LET SL=1')
     add(121, 'IF BD=38400 THEN LET TU=1')
     add(122, 'IF TU=1 THEN LET TT(1)=1:TT(2)=8:TT(3)=1:TT(4)=8:TT(5)=1:TT(6)=8')
@@ -215,16 +217,17 @@ def build():
             n += 10
         add(n, 'DATA %d' % tot)
     menu = [
-        (4000, 'REM --- TEST MENU: TX, RX, STREAM OF 55H, NEW SPEED ---'),
+        (4000, 'REM --- TEST MENU: KEYS 1 TX, 2 RX, 3 STREAM OF 55H, 4 NEW SPEED, 0 END ---'),
         (4005, 'S=A:I=A+%d:T=A+256:R=A+512:L=A+511' % labF['SERIN']),
-        (4010, 'Y$="":INPUT "1TX 2RX 3U 4BD 5OPC 0END ";Y$'),
+        (4010, 'PRINT "1TX 2RX 3U 4BAUD 0END"'),
+        (4011, 'IF INKEY$<>"" THEN GOTO 4011'),
+        (4012, 'Y$=INKEY$:IF Y$="" THEN GOTO 4012'),
         (4020, 'IF Y$="1" THEN GOTO 4100'),
         (4030, 'IF Y$="2" THEN GOTO 4400'),
         (4040, 'IF Y$="3" THEN GOTO 4300'),
         (4050, 'IF Y$="4" THEN GOTO 100'),
-        (4055, 'IF Y$="5" THEN GOTO 4600'),
         (4060, 'IF Y$="0" THEN END'),
-        (4070, 'GOTO 4010'),
+        (4070, 'GOTO 4012'),
         (4100, 'REM --- TX: HELLO PC-1600 CR LF ---'),
         (4110, 'POKE T,72,69,76,76,79,32,80,67,45,49,54,48,48,13,10'),
         (4120, 'N=15:CALL S,N:PRINT "SENT 15 BYTES":GOTO 4010'),
@@ -232,11 +235,15 @@ def build():
         (4310, 'FOR J=0 TO 254:POKE T+J,85:NEXT J'),
         (4320, 'PRINT "255 X 55H, STOP: BREAK"'),
         (4330, 'N=255:CALL S,N:GOTO 4330'),
-        (4400, 'REM --- RX: PACKETS (30 S WITHOUT DATA: BACK TO THE MENU) ---'),
-        (4410, 'E=0:INPUT "ECHO (1=YES) ";E'),
-        (4420, 'PRINT "WAITING FOR DATA..."'),
+        (4400, 'REM --- RX: PACKETS. HOLD A KEY (UP TO 3 S): BACK TO THE MENU ---'),
+        (4402, 'K=%d:IF TT(19)=1 THEN LET K=%d' % (labF['si_t1f'] + 1, labS['si_t1f'] + 1)),
+        (4404, 'PRINT "ECHO BACK? 1=YES 0=NO"'),
+        (4406, 'Y$=INKEY$:IF Y$="" THEN GOTO 4406'),
+        (4408, 'E=0:IF Y$="1" THEN LET E=1'),
+        (4410, 'POKE A+K,3:PRINT "WAITING (HOLD KEY=MENU)"'),
         (4430, 'N=0:CALL I,N:D=PEEK(L)'),
-        (4440, 'IF D=0 THEN PRINT "TIMEOUT":GOTO 4010'),
+        (4440, 'IF D=0 AND INKEY$<>"" THEN GOTO 4590'),
+        (4445, 'IF D=0 THEN GOTO 4430'),
         (4450, 'PRINT "RX ";D;" BYTES:"'),
         (4460, 'IF E<>1 THEN GOTO 4500'),
         (4470, 'FOR J=0 TO D-1:POKE T+J,PEEK(R+J):NEXT J'),
@@ -249,15 +256,8 @@ def build():
         (4550, 'IF LEN(Z$)>=26 THEN PRINT Z$:Z$=""'),
         (4560, 'NEXT J'),
         (4570, 'IF LEN(Z$)>0 THEN PRINT Z$'),
-        (4580, 'GOTO 4420'),
-        (4600, 'REM --- OPC TEST: CAN THE BUZZER STATE BE RESTORED AFTER SEROUT? ---'),
-        (4610, 'X=INP(&18):Y=X+128:IF X>127 THEN LET Y=X-128'),
-        (4620, 'OUT &18,Y:Z=INP(&18):OUT &18,X'),
-        (4630, 'TT(21)=0:IF Z=Y THEN LET TT(21)=1'),
-        (4640, 'PRINT "OPC ";X;" WROTE ";Y;" READ ";Z'),
-        (4650, 'IF TT(21)=1 THEN PRINT "READABLE: RESTORE ON"'),
-        (4660, 'IF TT(21)=0 THEN PRINT "NOT READABLE: RESTORE OFF"'),
-        (4670, 'PRINT "PRESS 4 TO APPLY":GOTO 4010')]
+        (4580, 'GOTO 4430'),
+        (4590, 'POKE A+K,TT(10):GOTO 4010')]
     L += menu
     L.sort()
     # no two-letter simple variables (the PC-1600 has A-Z only): BD, SL, TU live in the array TT()

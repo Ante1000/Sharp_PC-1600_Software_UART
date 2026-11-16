@@ -86,13 +86,13 @@ used. According to the PC-1600 schematic and the Technical Reference the levels 
    - checks that the code reads the buffer where BASIC wrote its marker, and shows
      `UART1600 READY, <speed> BPS`, the `CALL` addresses and the buffer addresses.
 4. Connect the other device as shown above.
-5. After the installation the **test menu** appears (`1TX 2RX 3U 4BD 5OPC 0END`):
+5. After the installation the **test menu** appears (`1TX 2RX 3U 4BAUD 0END`); press the key `0` ... `4`, no ENTER is needed:
    - `1` sends `HELLO PC-1600` with CR LF to the terminal,
-   - `2` receives packets and shows them (with `ECHO (1=YES)` it sends every packet back); after 30 s without data it
-     returns to the menu,
+   - `2` receives packets and shows them (it asks `ECHO BACK? 1=YES 0=NO`; with 1 it sends every packet back). The wait for a
+     packet is 3 s: to **leave the RX test and go back to the menu, hold any key** until the menu appears (up to 3 s; the keyboard
+     is not scanned while SERIN waits). **The test shows at most 16 received bytes per packet, e.g. `RX 16 BYTES` when 20 bytes
+     were sent from a terminal** (observed on the PC-1600; the cause has not been investigated yet, it does not matter for the test),
    - `3` sends 255 bytes of 55H again and again (a square wave, one bit per half period, for an oscilloscope; stop with BREAK),
-   - `5` tests whether the register OPC (port 18H: the TX pin 29 and the buzzer) can be read back; if so, it switches the
-     **restore of OPC** on (see below); press `4` to apply it,
    - `4` goes back to the question about the speed and installs the code again for the new speed (the ML address is not asked
      again), then the menu appears again,
    - `0` ends the program; the routines stay in memory.
@@ -145,13 +145,13 @@ Example (receive a packet and print it):
 ## The buzzer and the state of OPC after SEROUT
 
 The TX pin (PC7, bit 7 of the register OPC, port 18H) shares the line of the buzzer. SEROUT writes the whole OPC register
-(bit 7 = the bit, the other bits 0) and leaves it with the stop bit, so after a transmission the register is not what it was before.
-The code can **restore OPC**: SEROUT reads OPC at the start (`in a,(18H)`), keeps the value and writes it back at the end, after the
-last stop bit, so the buzzer and the other bits of port C are as they were before the call. This works only if OPC can be read back,
-which is not known for the PC-1600, so it is **off by default** (`TT(21)` = 0: the restoring `OUT` is patched into two NOPs).
-Menu item `5` of the program writes a changed value to OPC, reads it back and restores it: if the value comes back, it sets
-`TT(21)` = 1 (restore on); press `4` to install the code again with the restore. The emulator test checks that OPC has its old value
-after the call (`tools/verify_listing.py`, simulated readable register).
+(bit 7 = the bit, the other bits 0) and leaves it with the stop bit (80H). The code **restores OPC**: SEROUT reads OPC at the start
+(`in a,(18H)`), keeps the value and writes it back at the end, after the last stop bit, so OPC is as it was before the call.
+`TT(21)` = 1 (the default, line 115 of the program) switches the restore on; with 0 the restoring `OUT` is patched into two NOPs.
+
+Measured on the real PC-1600: OPC can be read back (writing 0 and reading gave 0), and its idle value was 128 (80H) whether `BEEP ON`
+or `BEEP OFF` was set before `RUN`. So the buzzer on/off state is not kept in OPC, and the restore matters only if OPC had another
+value before the call. The emulator test checks that OPC has its old value after the call (`tools/verify_listing.py`).
 
 ## How the loader finds the addresses
 
