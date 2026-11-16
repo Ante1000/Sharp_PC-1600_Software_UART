@@ -57,7 +57,7 @@ used. According to the PC-1600 schematic and the Technical Reference the levels 
 
 | File | Contents |
 |---|---|
-| `Basic/uart1600.txt` | **UART1600**: one BASIC program: installs SEROUT/SERIN in RAM (speed 300-38400 bps), finds the right addresses, patches the timing, and has a **TX/RX test menu** |
+| `Basic/uart1600.txt` | **UART1600**: one BASIC program: installs SEROUT/SERIN in RAM (speed 300-38400 bps), finds the right addresses, patches the timing, and has a TX (`HELLO PC-1600`) and RX (with echo) test menu, with a change of speed |
 | `wav/uart1600.wav` | tape recording of the program for `LOAD "CAS:UART1600"` (about 5 minutes) |
 | `tools/pc1600_bas2wav.py` | BASIC text -> tape recording (WAV) and decoder check (from the PC-1600 game repository); lines must not exceed 80 characters |
 | `asm/uart1600.asm` | source of SEROUT, SERIN and PROBE (assembler: `z80asm`) with all comments |
@@ -86,19 +86,19 @@ used. According to the PC-1600 schematic and the Technical Reference the levels 
    - checks that the code reads the buffer where BASIC wrote its marker, and shows
      `UART1600 READY, <speed> BPS`, the `CALL` addresses and the buffer addresses.
 4. Connect the other device as shown above.
-5. After the installation the **test menu** appears (`1TX 2RX 3U 4BAUD 0END`); press the key `0` ... `4`, no ENTER is needed:
-   - `1` sends `HELLO PC-1600` with CR LF to the terminal,
-   - `2` receives packets and shows them (it asks `ECHO BACK? 1=YES 0=NO`; with 1 it sends every packet back). The wait for a
-     packet is 3 s: to **leave the RX test and go back to the menu, hold the key `0`** until the menu appears (up to 3 s; the keyboard
-     is not scanned while SERIN waits). The menu reads the keys with `INKEY$` in a `FOR` loop (about 2 s); if no key is seen, it asks `KEY, ENTER` with `INPUT` (type the digit and ENTER). **The test shows at most 16 received bytes per packet, e.g. `RX 16 BYTES` when 20 bytes
-     were sent from a terminal** (observed on the PC-1600; the cause has not been investigated yet, it does not matter for the test),
-   - `3` sends 255 bytes of 55H again and again (a square wave, one bit per half period, for an oscilloscope; stop with BREAK),
-   - `4` goes back to the question about the speed and installs the code again for the new speed (the ML address is not asked
+5. After the installation the **test menu** appears: `1TX 2RX 3BAUD 0END`. Press the key (no ENTER is needed; the menu reads it with `INKEY$`):
+   - `1` sends `HELLO PC-1600` with CR LF to the terminal and returns to the menu,
+   - `2` receives packets, shows each one (`RX n BYTES` and the text) and **sends it back (echo)**; after **10 s without data** it
+     returns to the menu (BREAK also stops it, between the packets),
+   - `3` goes back to the question about the speed and installs the code again for the new speed (the ML address is not asked
      again), then the menu appears again,
    - `0` ends the program; the routines stay in memory.
+
+   **The test shows at most 16 received bytes per packet, e.g. `RX 16 BYTES` when 20 bytes were sent from a terminal** (observed on
+   the PC-1600; the cause has not been investigated yet, it does not matter for the test).
 6. The routines stay in memory (RAM at `&C0C5`) for your own programs until the memory is cleared or something else writes there.
 
-To change the speed or the polarity, use `4` in the menu, or run the program again with `RUN` (the variables in lines 111 to 114). The routines are lost when the memory is cleared
+To change the speed use `3` in the test menu, or run the program again with `RUN` (the polarity is in the variables in lines 111 to 114). The routines are lost when the memory is cleared
 (ALL RESET, or when something overwrites the area).
 
 ## Commands
@@ -203,9 +203,8 @@ The clock was measured with two machine-language loops, 10 calls each, timed wit
 With the interrupts off, `OUT` is not slower than the other instructions. The accuracy is about 5 %, so a bit may be
 one step of `TT(2)` or `TT(4)` (4 T-states, 2.6 % at 3 MHz) off. To adjust:
 
-1. TX: test menu `1` (`HELLO PC-1600`) or `3` (a stream of 55H bytes: a square wave, one bit = half a period, for an oscilloscope
-   the target at 19200 bps is 52.1 µs) with the terminal at the same speed; step `TT(2)` up and down.
-2. RX: send text from the terminal (menu `2`); do the same with `TT(4)`, `TT(5)` and `TT(6)`.
+1. TX: test menu `1` (`HELLO PC-1600`) with the terminal at the same speed; step `TT(2)` up and down.
+2. RX: test menu `2`, send text from the terminal; do the same with `TT(4)`, `TT(5)` and `TT(6)`.
 3. At 38400 bps the length of the bit is set by the displacement bytes of the `JR` instructions (lines 940 / `TURBO_J` in
    `tools/build_loader.py`): the value 9 in the first and third POKE gives 82 T-states; 10 gives 78 and 8 gives 86.
 4. You can also poke the new bytes directly (the code is at `A` = 49349) to try a setting without loading the loader again.
