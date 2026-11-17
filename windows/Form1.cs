@@ -89,7 +89,7 @@ namespace UartSlTest
             foreach (int b in new[] { 300, 600, 1200, 2400, 4800, 9600, 19200 }) comboBaud.Items.Add(b.ToString());
             comboBaud.SelectedItem = "9600";
             var lblDelay = new Label { Text = "Delay:" };
-            numDelay = new NumericUpDown { Width = 46, Minimum = 0, Maximum = 5000, Value = 100, Increment = 50 };
+            numDelay = new NumericUpDown { Width = 42, Minimum = 0, Maximum = 5000, Value = 100, Increment = 50 };
             var lblEol = new Label { Text = "EOL:" };
             comboEol = new ComboBox { Width = 50, DropDownStyle = ComboBoxStyle.DropDownList };
             comboEol.Items.AddRange(new object[] { "CR", "CR+LF", "LF" });
@@ -144,15 +144,15 @@ namespace UartSlTest
             lblHint = new Label { Left = 8, Top = 14, Width = 684, Height = 67, Anchor = TLR };
             gbInfo.Controls.Add(lblHint);
 
-            var gbFiles = new GroupBox { Text = "Files", Left = 10, Top = 366, Width = 565, Height = 176, Anchor = TLR };   // bottom edge = bottom of the Terminal button
+            var gbFiles = new GroupBox { Text = "Files", Left = 10, Top = 366, Width = 565, Height = 148, Anchor = TLR };   // only the list; the row of buttons below it ends with the Terminal button
             lstFiles = new ListBox { Left = 6, Top = 16, Width = 553, Height = 126, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
-            chkEof = new CheckBox { Text = "Add EOF marker", Left = 110, Top = 152, Width = 110, Checked = true };
-            chkAuto = new CheckBox { Text = "Auto tokenize", Left = 230, Top = 152, Width = 108, Checked = true };
-            btnAbort = Btn("Abort", Icons.Cross(), 468, 148, 90, 24, TR);
-            btnConvert = Btn("Convert", Icons.File(), 374, 148, 90, 24, TR);
-            btnView = Btn("View", Icons.File(), 8, 148, 90, 24, TL);
+            chkEof = new CheckBox { Text = "Add EOF marker", Left = 108, Top = 520, Width = 115, Checked = true };
+            chkAuto = new CheckBox { Text = "Auto tokenize", Left = 228, Top = 520, Width = 110, Checked = true };
+            btnAbort = Btn("Abort", Icons.Cross(), 485, 518, 90, 24, TR);
+            btnConvert = Btn("Convert", Icons.File(), 391, 518, 90, 24, TR);
+            btnView = Btn("View", Icons.File(), 10, 518, 90, 24, TL);
             btnView.Enabled = false;
-            gbFiles.Controls.AddRange(new Control[] { lstFiles, btnView, chkEof, chkAuto, btnConvert, btnAbort });
+            gbFiles.Controls.Add(lstFiles);
             btnSend = Btn("Send selected", Icons.Plane(), 585, 366, 125, 32, TR);
             btnSendOther = Btn("Send file...", Icons.File(), 585, 402, 125, 32, TR);
             btnRefreshFiles = Btn("Refresh list", Icons.Refresh(), 585, 438, 125, 32, TR);
@@ -173,7 +173,7 @@ namespace UartSlTest
             gbLog.Controls.Add(txtLog);
 
             Controls.AddRange(new Control[] { lblPort, comboPorts, btnRefresh, btnOpen, led, gbTarget, banner, gb,
-                lblDir, txtDir, btnLocations, btnBrowse, btnOpenDir, gbInfo, gbFiles, btnSend, btnSendOther, btnRefreshFiles, btnDelete, btnTerminal, gbLog });
+                lblDir, txtDir, btnLocations, btnBrowse, btnOpenDir, gbInfo, gbFiles, btnView, chkEof, chkAuto, btnConvert, btnAbort, btnSend, btnSendOther, btnRefreshFiles, btnDelete, btnTerminal, gbLog });
 
             // title row: everything else moves down by one row (40 px)
             foreach (Control c in Controls) c.Top += 40;
