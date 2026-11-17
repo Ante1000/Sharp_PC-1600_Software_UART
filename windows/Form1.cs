@@ -96,7 +96,9 @@ namespace UartSlTest
             btnBrowse = Btn("Browse...", Icons.Folder(), 530, 249, 92, 28, TR);
             btnOpenDir = Btn("Open", Icons.Folder(), 628, 249, 82, 28, TR);
 
-            lblHint = new Label { Left = 10, Top = 284, Width = 700, Height = 48, Anchor = TLR, BorderStyle = BorderStyle.FixedSingle, Padding = new Padding(4) };
+            var gbInfo = new GroupBox { Text = "Info", Left = 10, Top = 280, Width = 700, Height = 58, Anchor = TLR };
+            lblHint = new Label { Left = 8, Top = 14, Width = 684, Height = 41, Anchor = TLR };
+            gbInfo.Controls.Add(lblHint);
 
             lstFiles = new ListBox { Left = 10, Top = 340, Width = 565, Height = 110, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
             btnSend = Btn("Send selected", Icons.Plane(), 585, 340, 125, 34, TR);
@@ -111,7 +113,7 @@ namespace UartSlTest
             };
 
             Controls.AddRange(new Control[] { lblPort, comboPorts, btnRefresh, btnOpen, led, gbTarget, banner, gb,
-                lblDir, txtDir, btnBrowse, btnOpenDir, lblHint, lstFiles, btnSend, btnSendOther, btnRefreshFiles, txtLog });
+                lblDir, txtDir, btnBrowse, btnOpenDir, gbInfo, lstFiles, btnSend, btnSendOther, btnRefreshFiles, txtLog });
 
             // title row: everything else moves down by one row (40 px)
             foreach (Control c in Controls) c.Top += 40;
@@ -190,7 +192,7 @@ namespace UartSlTest
         string HintText()
         {
             if (radioSio.Checked)
-                return "Other Sharp models through the 15-pin connector (TTL-UART SIO + USB/COM adapter), like TeraTerm. RECEIVE: send the program as text from the pocket computer (same baud rate on both sides); the file is saved after 3 s of silence.\r\nSEND: start receiving on the pocket computer first, then press Send. Lines are sent one by one with the delay set above.";
+                return "Compatible models: PC-1350, PC-1360, PC-1450-80, PC-E500 ... PC-E650 series, PC-U6000, PC-2500.\r\n15-pin connector, TTL-UART SIO through a USB/COM adapter (like TeraTerm). RECEIVE: send the program as text, the file is saved after 3 s of silence. SEND: start receiving on the pocket computer, then press Send.";
             if (radio1500.Checked && radioRs.Checked)
                 return "PC-1500 with the CE-158(X) RS-232 interface (text, same baud rate on both sides). RECEIVE: the file is saved after 3 s of silence, named after the first REM line.\r\nSEND: start receiving on the PC-1500 first, then press Send. Lines are sent one by one with the delay set above.";
             if (radio1500.Checked)
