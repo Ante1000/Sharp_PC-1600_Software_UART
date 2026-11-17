@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.IO;
 using System.IO.Ports;
 using System.Text;
@@ -9,24 +10,24 @@ using System.Windows.Forms;
 
 namespace UartSlTest
 {
-    // Format pliku .sl16 = dokladnie strumien z SAVE: bajty programu BASIC + 1 bajt sumy kontrolnej (suma mod 256).
-    // Linia: [nr linii 2B][dlugosc 1B][tresc, na koncu 0D]. Znacznika konca (FF) w pliku nie ma.
+    // .sl16 file = exactly the stream sent by SAVE: BASIC program bytes + 1 checksum byte (sum mod 256).
+    // Line: [line number 2 B][length 1 B][content, ends with 0D]. The end marker (FF) is not stored.
     public static class Sl16
     {
         public static bool Check(byte[] s, out string err)
         {
             err = null;
-            if (s.Length < 2) { err = "strumien za krotki (pusty program?)"; return false; }
+            if (s.Length < 2) { err = "stream too short (empty program?)"; return false; }
             int n = s.Length - 1, sum = 0;
             for (int i = 0; i < n; i++) sum += s[i];
-            if ((sum & 0xFF) != s[n]) { err = "zla suma kontrolna"; return false; }
+            if ((sum & 0xFF) != s[n]) { err = "bad checksum"; return false; }
             int p = 0;
             while (p < n)
             {
-                if (p + 3 > n) { err = "ucieta linia"; return false; }
+                if (p + 3 > n) { err = "truncated line"; return false; }
                 int len = s[p + 2];
-                if (len < 2 || p + 3 + len > n) { err = "zla dlugosc linii przy bajcie " + p; return false; }
-                if (s[p + 2 + len] != 0x0D) { err = "brak CR na koncu linii przy bajcie " + p; return false; }
+                if (len < 2 || p + 3 + len > n) { err = "bad line length at byte " + p; return false; }
+                if (s[p + 2 + len] != 0x0D) { err = "missing CR at the end of the line at byte " + p; return false; }
                 p += 3 + len;
             }
             return true;
@@ -39,7 +40,7 @@ namespace UartSlTest
             return c;
         }
 
-        // nazwa z pierwszej linii zaczynajacej sie od REM (F1 AB)
+        // name taken from the first line that starts with REM (token F1 AB)
         public static string NameFromRem(byte[] s)
         {
             int n = s.Length - 1, p = 0;
@@ -59,7 +60,28 @@ namespace UartSlTest
             return null;
         }
 
-        static string Clean(string t)
+        // name taken from the first "[number] REM text" line of an ASCII listing
+        public static string NameFromText(byte[] s)
+        {
+            var line = new StringBuilder();
+            for (int i = 0; i <= s.Length; i++)
+            {
+                if (i == s.Length || s[i] == 0x0D || s[i] == 0x0A)
+                {
+                    string t = line.ToString().TrimStart(' ', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9');
+                    line.Length = 0;
+                    if (t.StartsWith("REM", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string name = Clean(t.Substring(3).TrimStart(' ', '\''));
+                        if (name.Length > 0) return name;
+                    }
+                }
+                else line.Append((char)s[i]);
+            }
+            return null;
+        }
+
+        public static string Clean(string t)
         {
             var bad = Path.GetInvalidFileNameChars();
             var sb = new StringBuilder();
@@ -71,6 +93,136 @@ namespace UartSlTest
         }
     }
 
+    // Small icons drawn in code (no image files needed)
+    public static class Icons
+    {
+        static Bitmap Make(Action<Graphics, Pen, Brush> draw)
+        {
+            var b = new Bitmap(20, 20);
+            using (var g = Graphics.FromImage(b))
+            using (var pen = new Pen(Color.FromArgb(40, 70, 120), 2f))
+            using (var br = new SolidBrush(Color.FromArgb(40, 70, 120)))
+            {
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                draw(g, pen, br);
+            }
+            return b;
+        }
+
+        public static Bitmap Refresh() { return Make((g, p, b) => { g.DrawArc(p, 4, 4, 12, 12, 30, 290); g.FillPolygon(b, new[] { new Point(18, 3), new Point(18, 11), new Point(10, 8) }); }); }
+        public static Bitmap Plug() { return Make((g, p, b) => { g.FillRectangle(b, 5, 9, 10, 7); g.DrawLine(p, 8, 3, 8, 9); g.DrawLine(p, 12, 3, 12, 9); }); }
+        public static Bitmap Cross() { return Make((g, p, b) => { g.DrawLine(p, 5, 5, 15, 15); g.DrawLine(p, 15, 5, 5, 15); }); }
+        public static Bitmap Folder() { return Make((g, p, b) => { g.FillRectangle(b, 2, 6, 16, 11); g.FillRectangle(b, 2, 4, 7, 3); }); }
+        public static Bitmap Plane() { return Make((g, p, b) => { g.FillPolygon(b, new[] { new Point(2, 10), new Point(18, 3), new Point(13, 17), new Point(10, 12) }); }); }
+        public static Bitmap File() { return Make((g, p, b) => { g.DrawRectangle(p, 5, 2, 10, 16); g.DrawLine(p, 8, 8, 12, 8); g.DrawLine(p, 8, 12, 12, 12); }); }
+        public static Icon AppIcon()
+        {
+            using (var bmp = new Bitmap(32, 32))
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.Clear(Color.Transparent);
+                using (var b = new SolidBrush(Color.FromArgb(30, 70, 120))) g.FillEllipse(b, 1, 1, 30, 30);
+                using (var b = new SolidBrush(Color.FromArgb(150, 220, 255)))
+                {
+                    g.FillPolygon(b, new[] { new Point(6, 11), new Point(18, 11), new Point(18, 7), new Point(26, 14), new Point(18, 21), new Point(18, 17), new Point(6, 17) });
+                }
+                return Icon.FromHandle(bmp.GetHicon());
+            }
+        }
+    }
+
+    // Banner: PC <-> PC-1600
+    public class BannerPanel : Panel
+    {
+        public bool PortOpen, Sending, Receiving;
+
+        public BannerPanel() { DoubleBuffered = true; ResizeRedraw = true; }
+
+        static GraphicsPath Round(float x, float y, float w, float h, float r)
+        {
+            var gp = new GraphicsPath();
+            gp.AddArc(x, y, 2 * r, 2 * r, 180, 90);
+            gp.AddArc(x + w - 2 * r, y, 2 * r, 2 * r, 270, 90);
+            gp.AddArc(x + w - 2 * r, y + h - 2 * r, 2 * r, 2 * r, 0, 90);
+            gp.AddArc(x, y + h - 2 * r, 2 * r, 2 * r, 90, 90);
+            gp.CloseFigure();
+            return gp;
+        }
+
+        static void FillRound(Graphics g, Color c, float x, float y, float w, float h, float r)
+        {
+            using (var gp = Round(x, y, w, h, r)) using (var b = new SolidBrush(c)) g.FillPath(b, gp);
+        }
+
+        static void Text(Graphics g, string s, Font f, Color c, float cx, float y)
+        {
+            using (var b = new SolidBrush(c))
+            {
+                SizeF sz = g.MeasureString(s, f);
+                g.DrawString(s, f, b, cx - sz.Width / 2, y);
+            }
+        }
+
+        static void Arrow(Graphics g, int x1, int x2, int y, bool right, bool active)
+        {
+            Color c = active ? Color.FromArgb(130, 225, 255) : Color.FromArgb(70, 120, 175);
+            Point[] pts = right
+                ? new[] { new Point(x1, y - 5), new Point(x2 - 22, y - 5), new Point(x2 - 22, y - 12), new Point(x2, y), new Point(x2 - 22, y + 12), new Point(x2 - 22, y + 5), new Point(x1, y + 5) }
+                : new[] { new Point(x2, y - 5), new Point(x1 + 22, y - 5), new Point(x1 + 22, y - 12), new Point(x1, y), new Point(x1 + 22, y + 12), new Point(x1 + 22, y + 5), new Point(x2, y + 5) };
+            using (var b = new SolidBrush(c)) g.FillPolygon(b, pts);
+        }
+
+        static void Led(Graphics g, Color c, int cx, int y)
+        {
+            using (var b = new SolidBrush(c)) g.FillEllipse(b, cx - 5, y, 10, 10);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+            if (Width < 100 || Height < 60) return;
+            var r = ClientRectangle;
+            using (var br = new LinearGradientBrush(r, Color.FromArgb(14, 38, 72), Color.FromArgb(30, 70, 120), LinearGradientMode.Horizontal))
+                g.FillRectangle(br, r);
+
+            int pcx = Width * 22 / 100, kx = Width * 78 / 100, top = 12;
+
+            // PC
+            FillRound(g, Color.FromArgb(214, 208, 190), pcx - 48, top, 96, 70, 8);
+            using (var b = new SolidBrush(Color.FromArgb(10, 25, 30))) g.FillRectangle(b, pcx - 40, top + 8, 80, 50);
+            using (var f = new Font("Consolas", 16F, FontStyle.Bold)) Text(g, "PC", f, Color.FromArgb(90, 230, 120), pcx, top + 20);
+            using (var b = new SolidBrush(Color.FromArgb(190, 184, 168))) g.FillRectangle(b, pcx - 14, top + 70, 28, 8);
+            FillRound(g, Color.FromArgb(200, 194, 178), pcx - 56, top + 80, 112, 16, 4);
+            using (var b = new SolidBrush(Color.FromArgb(120, 115, 105)))
+                for (int i = 0; i < 10; i++) { g.FillRectangle(b, pcx - 50 + i * 10, top + 84, 7, 3); g.FillRectangle(b, pcx - 48 + i * 10, top + 89, 7, 3); }
+
+            // PC-1600
+            FillRound(g, Color.FromArgb(60, 62, 70), kx - 62, top + 6, 124, 84, 8);
+            using (var b = new SolidBrush(Color.FromArgb(176, 194, 164))) g.FillRectangle(b, kx - 54, top + 12, 108, 18);
+            using (var f = new Font("Consolas", 9F, FontStyle.Bold)) Text(g, "PC-1600", f, Color.FromArgb(40, 60, 40), kx, top + 14);
+            for (int row = 0; row < 4; row++)
+                for (int col = 0; col < 9; col++)
+                    using (var b = new SolidBrush(row == 0 && col > 6 ? Color.FromArgb(230, 140, 40) : Color.FromArgb(205, 205, 200)))
+                        g.FillRectangle(b, kx - 54 + col * 12, top + 36 + row * 12, 9, 8);
+
+            // captions
+            using (var f = new Font("Segoe UI", 9F)) { Text(g, "Windows PC", f, Color.White, pcx, top + 100); Text(g, "Sharp PC-1600", f, Color.White, kx, top + 100); }
+
+            // centre: title, arrows, LEDs
+            int mid = Width / 2, ax1 = pcx + 70, ax2 = kx - 76;
+            using (var f = new Font("Segoe UI", 14F, FontStyle.Bold)) Text(g, "SerComet", f, Color.White, mid, top - 4);
+            Arrow(g, ax1, ax2, top + 44, true, Sending);
+            Arrow(g, ax1, ax2, top + 74, false, Receiving);
+            Color ok = PortOpen ? Color.FromArgb(70, 220, 90) : Color.FromArgb(90, 90, 100);
+            Led(g, ok, mid - 18, top + 96);
+            Led(g, ok, mid, top + 96);
+            Led(g, Sending || Receiving ? Color.FromArgb(240, 60, 50) : Color.FromArgb(90, 90, 100), mid + 18, top + 96);
+        }
+    }
+
     public partial class Form1 : Form
     {
         SerialPort port;
@@ -78,64 +230,98 @@ namespace UartSlTest
         readonly object rxLock = new object();
         int lastRx;
         bool sending;
+        volatile bool rs232;
 
-        ComboBox comboPorts;
+        BannerPanel banner;
+        ComboBox comboPorts, comboBaud;
         Button btnRefresh, btnOpen, btnBrowse, btnOpenDir, btnSend, btnSendOther, btnRefreshFiles;
         TextBox txtDir, txtLog;
         ListBox lstFiles;
-        Label lblStatus;
+        Label lblStatus, lblHint;
+        RadioButton radioSoft, radioRs;
+        NumericUpDown numDelay;
         Timer timer;
 
         public Form1()
         {
             InitializeComponent();
+            try { Icon = Icons.AppIcon(); } catch { }
             BuildUi();
             FormClosing += delegate { ClosePort(); };
             RefreshPorts();
-            RefreshFiles();
-            Log("Gotowe. Wybierz port i kliknij 'Otworz port' (19200 8N1).");
+            UpdateMode();
+            Log("Ready. Select the port and click 'Open port'.");
+        }
+
+        Button Btn(string text, Bitmap img, int x, int y, int w, int h, AnchorStyles anchor)
+        {
+            return new Button
+            {
+                Text = "  " + text, Image = img, ImageAlign = ContentAlignment.MiddleLeft,
+                TextAlign = ContentAlignment.MiddleCenter, Left = x, Top = y, Width = w, Height = h, Anchor = anchor
+            };
         }
 
         void BuildUi()
         {
-            var lbl1 = new Label { Text = "Port:", Left = 10, Top = 14, Width = 40 };
-            comboPorts = new ComboBox { Left = 55, Top = 10, Width = 100, DropDownStyle = ComboBoxStyle.DropDownList };
-            btnRefresh = new Button { Text = "Odswiez", Left = 165, Top = 9, Width = 70 };
-            btnOpen = new Button { Text = "Otworz port", Left = 245, Top = 9, Width = 100 };
-            lblStatus = new Label { Text = "port zamkniety", Left = 355, Top = 14, Width = 330, ForeColor = Color.DarkRed };
+            const AnchorStyles TL = AnchorStyles.Top | AnchorStyles.Left;
+            const AnchorStyles TR = AnchorStyles.Top | AnchorStyles.Right;
+            const AnchorStyles TLR = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
 
-            var lbl2 = new Label { Text = "Katalog:", Left = 10, Top = 46, Width = 50 };
+            var lblPort = new Label { Text = "Port:", Left = 10, Top = 16, Width = 40 };
+            comboPorts = new ComboBox { Left = 55, Top = 12, Width = 100, DropDownStyle = ComboBoxStyle.DropDownList };
+            btnRefresh = Btn("Refresh", Icons.Refresh(), 165, 9, 100, 28, TL);
+            btnOpen = Btn("Open port", Icons.Plug(), 275, 9, 130, 28, TL);
+            lblStatus = new Label
+            {
+                Text = "Port closed", Left = 470, Top = 11, Width = 240, Height = 26, Anchor = TR,
+                TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.White, BackColor = Color.FromArgb(170, 50, 50)
+            };
+
+            banner = new BannerPanel { Left = 10, Top = 46, Width = 700, Height = 132, Anchor = TLR };
+
+            var gb = new GroupBox { Text = "PC-1600 transmission", Left = 10, Top = 184, Width = 700, Height = 58, Anchor = TLR };
+            radioSoft = new RadioButton { Text = "Software serial (19200 8N1, binary)", Left = 12, Top = 24, Width = 235, Checked = true };
+            radioRs = new RadioButton { Text = "RS-232 (serial port, text)", Left = 250, Top = 24, Width = 155 };
+            var lblBaud = new Label { Text = "Baud:", Left = 410, Top = 27, Width = 35 };
+            comboBaud = new ComboBox { Left = 447, Top = 23, Width = 65, DropDownStyle = ComboBoxStyle.DropDownList };
+            foreach (int b in new[] { 300, 600, 1200, 2400, 4800, 9600, 19200 }) comboBaud.Items.Add(b.ToString());
+            comboBaud.SelectedItem = "9600";
+            var lblDelay = new Label { Text = "Line delay (ms):", Left = 522, Top = 27, Width = 90 };
+            numDelay = new NumericUpDown { Left = 614, Top = 23, Width = 70, Minimum = 0, Maximum = 5000, Value = 100, Increment = 50 };
+            gb.Controls.AddRange(new Control[] { radioSoft, radioRs, lblBaud, comboBaud, lblDelay, numDelay });
+
+            var lblDir = new Label { Text = "Folder:", Left = 10, Top = 256, Width = 50 };
             txtDir = new TextBox
             {
-                Left = 65, Top = 42, Width = 460,
+                Left = 65, Top = 252, Width = 440, Anchor = TLR,
                 Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "PC1600")
             };
-            btnBrowse = new Button { Text = "Wybierz...", Left = 535, Top = 41, Width = 70 };
-            btnOpenDir = new Button { Text = "Otworz", Left = 610, Top = 41, Width = 60 };
+            btnBrowse = Btn("Browse...", Icons.Folder(), 515, 249, 105, 28, TR);
+            btnOpenDir = Btn("Open", Icons.Folder(), 625, 249, 85, 28, TR);
 
-            var lbl3 = new Label
-            {
-                Text = "ODBIOR: na PC-1600 wykonaj SAVE (CALL adres,X). Plik zapisze sie sam, nazwa z pierwszego REM.   WYSYLANIE: najpierw LOAD na PC-1600 (CALL adres+176,X), potem przycisk (30 s na start).",
-                Left = 10, Top = 74, Width = 680, Height = 32
-            };
+            lblHint = new Label { Left = 10, Top = 284, Width = 700, Height = 48, Anchor = TLR, BorderStyle = BorderStyle.FixedSingle, Padding = new Padding(4) };
 
-            lstFiles = new ListBox { Left = 10, Top = 110, Width = 520, Height = 150 };
-            btnSend = new Button { Text = "Wyslij wybrany do PC-1600", Left = 540, Top = 110, Width = 150, Height = 30 };
-            btnSendOther = new Button { Text = "Wyslij plik z dysku...", Left = 540, Top = 146, Width = 150, Height = 30 };
-            btnRefreshFiles = new Button { Text = "Odswiez liste", Left = 540, Top = 182, Width = 150, Height = 30 };
+            lstFiles = new ListBox { Left = 10, Top = 340, Width = 540, Height = 110, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
+            btnSend = Btn("Send selected", Icons.Plane(), 560, 340, 150, 34, TR);
+            btnSendOther = Btn("Send file...", Icons.File(), 560, 380, 150, 34, TR);
+            btnRefreshFiles = Btn("Refresh list", Icons.Refresh(), 560, 420, 150, 30, TR);
 
             txtLog = new TextBox
             {
-                Left = 10, Top = 270, Width = 680, Height = 240, Multiline = true,
-                ScrollBars = ScrollBars.Vertical, ReadOnly = true, Font = new Font("Consolas", 9F)
+                Left = 10, Top = 460, Width = 700, Height = 130, Multiline = true,
+                ScrollBars = ScrollBars.Vertical, ReadOnly = true, Font = new Font("Consolas", 9F),
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
             };
 
-            Controls.AddRange(new Control[] { lbl1, comboPorts, btnRefresh, btnOpen, lblStatus, lbl2, txtDir,
-                btnBrowse, btnOpenDir, lbl3, lstFiles, btnSend, btnSendOther, btnRefreshFiles, txtLog });
-            txtLog.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            Controls.AddRange(new Control[] { lblPort, comboPorts, btnRefresh, btnOpen, lblStatus, banner, gb,
+                lblDir, txtDir, btnBrowse, btnOpenDir, lblHint, lstFiles, btnSend, btnSendOther, btnRefreshFiles, txtLog });
 
             btnRefresh.Click += delegate { RefreshPorts(); };
             btnOpen.Click += delegate { TogglePort(); };
+            radioSoft.CheckedChanged += delegate { UpdateMode(); };
+            radioRs.CheckedChanged += delegate { UpdateMode(); };
+            comboBaud.SelectedIndexChanged += delegate { ApplyBaud(); };
             btnBrowse.Click += delegate
             {
                 using (var d = new FolderBrowserDialog())
@@ -147,19 +333,19 @@ namespace UartSlTest
             btnOpenDir.Click += delegate
             {
                 try { Directory.CreateDirectory(txtDir.Text); System.Diagnostics.Process.Start(txtDir.Text); }
-                catch (Exception ex) { Log("Blad: " + ex.Message); }
+                catch (Exception ex) { Log("Error: " + ex.Message); }
             };
             btnRefreshFiles.Click += delegate { RefreshFiles(); };
             btnSend.Click += delegate
             {
-                if (lstFiles.SelectedItem == null) { Log("Zaznacz plik na liscie."); return; }
+                if (lstFiles.SelectedItem == null) { Log("Select a file in the list."); return; }
                 SendFile(Path.Combine(txtDir.Text, (string)lstFiles.SelectedItem));
             };
             btnSendOther.Click += delegate
             {
                 using (var d = new OpenFileDialog())
                 {
-                    d.Filter = "Pliki PC-1600 (*.sl16)|*.sl16|Wszystkie|*.*";
+                    d.Filter = rs232 ? "BASIC text (*.bas;*.txt)|*.bas;*.txt|All files|*.*" : "PC-1600 files (*.sl16)|*.sl16|All files|*.*";
                     if (d.ShowDialog() == DialogResult.OK) SendFile(d.FileName);
                 }
             };
@@ -167,6 +353,33 @@ namespace UartSlTest
             timer = new Timer { Interval = 100 };
             timer.Tick += TimerTick;
             timer.Start();
+        }
+
+        string Ext { get { return rs232 ? ".bas" : ".sl16"; } }
+        int Baud { get { return rs232 ? int.Parse((string)comboBaud.SelectedItem) : 19200; } }
+
+        void UpdateMode()
+        {
+            rs232 = radioRs.Checked;
+            comboBaud.Enabled = numDelay.Enabled = rs232;
+            lblHint.Text = rs232
+                ? "RECEIVE: send the program as text from the PC-1600 through its RS-232 port (same baud rate on both sides). The file is saved after 3 s of silence, named after the first REM line.\r\nSEND: start receiving on the PC-1600 first, then press Send. Lines are sent one by one with the delay set above."
+                : "RECEIVE: on the PC-1600 run SAVE (CALL addr,X). The file is saved automatically, named after the first REM.\r\nSEND: run LOAD on the PC-1600 first (CALL addr+176,X), then press Send (30 s to start).";
+            ApplyBaud();
+            RefreshFiles();
+        }
+
+        void ApplyBaud()
+        {
+            try { if (port != null && port.IsOpen) { port.BaudRate = Baud; SetStatus(true); } } catch (Exception ex) { Log("Error: " + ex.Message); }
+        }
+
+        void SetStatus(bool open)
+        {
+            banner.PortOpen = open;
+            banner.Invalidate();
+            lblStatus.Text = open ? port.PortName + " open, " + port.BaudRate + " 8N1" : "Port closed";
+            lblStatus.BackColor = open ? Color.FromArgb(30, 140, 60) : Color.FromArgb(170, 50, 50);
         }
 
         void Log(string s)
@@ -189,32 +402,32 @@ namespace UartSlTest
             try
             {
                 if (Directory.Exists(txtDir.Text))
-                    foreach (string f in Directory.GetFiles(txtDir.Text, "*.sl16"))
+                    foreach (string f in Directory.GetFiles(txtDir.Text, "*" + Ext))
                         lstFiles.Items.Add(Path.GetFileName(f));
             }
-            catch (Exception ex) { Log("Blad listy: " + ex.Message); }
+            catch (Exception ex) { Log("List error: " + ex.Message); }
         }
 
         void TogglePort()
         {
             if (port != null) { ClosePort(); return; }
             string name = comboPorts.SelectedItem as string;
-            if (name == null) { Log("Brak wybranego portu."); return; }
+            if (name == null) { Log("No port selected."); return; }
             try
             {
-                port = new SerialPort(name, 19200, Parity.None, 8, StopBits.One);
+                port = new SerialPort(name, Baud, Parity.None, 8, StopBits.One);
                 port.Handshake = Handshake.None;
                 port.ReadBufferSize = 65536;
                 port.DataReceived += OnData;
                 port.Open();
-                btnOpen.Text = "Zamknij port";
-                lblStatus.Text = name + " otwarty, 19200 8N1";
-                lblStatus.ForeColor = Color.DarkGreen;
-                Log("Port " + name + " otwarty.");
+                btnOpen.Text = "  Close port";
+                btnOpen.Image = Icons.Cross();
+                SetStatus(true);
+                Log("Port " + name + " open (" + port.BaudRate + " 8N1).");
             }
             catch (Exception ex)
             {
-                Log("Nie mozna otworzyc portu: " + ex.Message);
+                Log("Cannot open the port: " + ex.Message);
                 port = null;
             }
         }
@@ -224,9 +437,12 @@ namespace UartSlTest
             if (port == null) return;
             try { port.DataReceived -= OnData; if (port.IsOpen) port.Close(); } catch { }
             port = null;
-            btnOpen.Text = "Otworz port";
-            lblStatus.Text = "port zamkniety";
-            lblStatus.ForeColor = Color.DarkRed;
+            btnOpen.Text = "  Open port";
+            btnOpen.Image = Icons.Plug();
+            banner.PortOpen = false;
+            banner.Invalidate();
+            lblStatus.Text = "Port closed";
+            lblStatus.BackColor = Color.FromArgb(170, 50, 50);
         }
 
         void OnData(object sender, SerialDataReceivedEventArgs e)
@@ -249,17 +465,27 @@ namespace UartSlTest
             catch { }
         }
 
-        // 0,8 s ciszy po odebraniu bajtow = koniec transmisji (SAVE wysyla bez przerw)
+        // end of transmission = silence: 0.8 s (software serial, SAVE sends without gaps), 3 s (RS-232 text)
         void TimerTick(object sender, EventArgs e)
         {
             byte[] data = null;
+            bool receiving = false;
             lock (rxLock)
             {
-                if (rx.Count > 0 && unchecked(Environment.TickCount - lastRx) > 800)
+                int quiet = unchecked(Environment.TickCount - lastRx);
+                receiving = rx.Count > 0;
+                if (rx.Count > 0 && quiet > (rs232 ? 3000 : 800))
                 {
                     data = rx.ToArray();
                     rx.Clear();
+                    receiving = false;
                 }
+            }
+            if (banner.Receiving != receiving || banner.Sending != sending)
+            {
+                banner.Receiving = receiving;
+                banner.Sending = sending;
+                banner.Invalidate();
             }
             if (data != null) Received(data);
         }
@@ -269,24 +495,32 @@ namespace UartSlTest
             try
             {
                 Directory.CreateDirectory(txtDir.Text);
+                if (rs232)
+                {
+                    string name = Sl16.NameFromText(data) ?? "PROGRAM_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                    string path = UniquePath(name, ".bas");
+                    File.WriteAllBytes(path, data);
+                    Log("RECEIVED " + data.Length + " B (text) -> " + Path.GetFileName(path));
+                    RefreshFiles();
+                    return;
+                }
                 string err;
                 if (Sl16.Check(data, out err))
                 {
-                    string name = Sl16.NameFromRem(data);
-                    if (name == null) name = "PROGRAM_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                    string name = Sl16.NameFromRem(data) ?? "PROGRAM_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
                     string path = UniquePath(name, ".sl16");
                     File.WriteAllBytes(path, data);
-                    Log("ODEBRANO " + data.Length + " B, " + Sl16.CountLines(data) + " linii, suma OK -> " + Path.GetFileName(path));
+                    Log("RECEIVED " + data.Length + " B, " + Sl16.CountLines(data) + " lines, checksum OK -> " + Path.GetFileName(path));
                     RefreshFiles();
                 }
                 else
                 {
-                    string path = UniquePath("BLAD_" + DateTime.Now.ToString("yyyyMMdd_HHmmss"), ".bad");
+                    string path = UniquePath("ERROR_" + DateTime.Now.ToString("yyyyMMdd_HHmmss"), ".bad");
                     File.WriteAllBytes(path, data);
-                    Log("BLAD ODBIORU (" + err + "), " + data.Length + " B zapisano jako " + Path.GetFileName(path) + ". Powtorz SAVE.");
+                    Log("RECEIVE ERROR (" + err + "), " + data.Length + " B saved as " + Path.GetFileName(path) + ". Repeat SAVE.");
                 }
             }
-            catch (Exception ex) { Log("Blad zapisu: " + ex.Message); }
+            catch (Exception ex) { Log("Write error: " + ex.Message); }
         }
 
         string UniquePath(string name, string ext)
@@ -299,28 +533,56 @@ namespace UartSlTest
 
         async void SendFile(string path)
         {
-            if (port == null || !port.IsOpen) { Log("Najpierw otworz port."); return; }
+            if (port == null || !port.IsOpen) { Log("Open the port first."); return; }
             if (sending) return;
             byte[] data;
             try { data = File.ReadAllBytes(path); }
-            catch (Exception ex) { Log("Blad odczytu: " + ex.Message); return; }
-            string err;
-            if (!Sl16.Check(data, out err)) { Log("Plik odrzucony: " + err); return; }
+            catch (Exception ex) { Log("Read error: " + ex.Message); return; }
+            bool text = rs232;
+            int delay = (int)numDelay.Value;
+            if (!text)
+            {
+                string err;
+                if (!Sl16.Check(data, out err)) { Log("File rejected: " + err); return; }
+            }
             sending = true;
             btnSend.Enabled = btnSendOther.Enabled = false;
-            Log("WYSYLAM " + Path.GetFileName(path) + " (" + data.Length + " B)...");
+            Log("SENDING " + Path.GetFileName(path) + " (" + data.Length + " B)...");
             try
             {
                 var p = port;
                 await Task.Run(() =>
                 {
                     p.DiscardInBuffer();
-                    p.Write(data, 0, data.Length);
+                    if (!text)
+                    {
+                        p.Write(data, 0, data.Length);
+                    }
+                    else
+                    {
+                        // text: line by line, every line ends with CR
+                        var line = new List<byte>();
+                        for (int i = 0; i <= data.Length; i++)
+                        {
+                            if (i == data.Length || data[i] == 0x0D || data[i] == 0x0A)
+                            {
+                                if (line.Count > 0)
+                                {
+                                    line.Add(0x0D);
+                                    p.Write(line.ToArray(), 0, line.Count);
+                                    line.Clear();
+                                    while (p.BytesToWrite > 0) System.Threading.Thread.Sleep(5);
+                                    System.Threading.Thread.Sleep(delay);
+                                }
+                            }
+                            else line.Add(data[i]);
+                        }
+                    }
                     while (p.BytesToWrite > 0) System.Threading.Thread.Sleep(10);
                 });
-                Log("Wyslano. PC-1600 konczy po 0,5 s ciszy; sprawdz X=1 (PRINT X) i LIST.");
+                Log(text ? "Sent." : "Sent. The PC-1600 finishes after 0.5 s of silence; check X=1 (PRINT X) and LIST.");
             }
-            catch (Exception ex) { Log("Blad wysylania: " + ex.Message); }
+            catch (Exception ex) { Log("Send error: " + ex.Message); }
             finally
             {
                 lock (rxLock) { rx.Clear(); }

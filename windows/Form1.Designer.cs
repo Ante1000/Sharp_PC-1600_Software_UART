@@ -15,9 +15,11 @@ namespace UartSlTest
             this.SuspendLayout();
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(700, 520);
+            this.ClientSize = new System.Drawing.Size(720, 600);
+            this.MinimumSize = new System.Drawing.Size(736, 560);
             this.Name = "Form1";
-            this.Text = "PC-1600 Save/Load 19200";
+            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
+            this.Text = "SerComet";
             this.ResumeLayout(false);
         }
     }
