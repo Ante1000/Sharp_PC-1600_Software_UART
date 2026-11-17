@@ -20,7 +20,7 @@ namespace UartSlTest
         volatile bool rs232;
 
         BannerPanel banner;
-        ComboBox comboPorts, comboBaud, comboEol, comboFlow;
+        ComboBox comboPorts, comboBaud, comboEol;
         readonly ToolTip tips = new ToolTip { AutoPopDelay = 9000, InitialDelay = 400, ReshowDelay = 200, ShowAlways = true };
         TerminalForm term;
         Button btnTerminal;
@@ -73,31 +73,26 @@ namespace UartSlTest
 
             banner = new BannerPanel { Left = 10, Top = 46, Width = 700, Height = 132, Anchor = TLR };
 
-            var gb = new GroupBox { Text = "Transmission mode", Left = 10, Top = 184, Width = 700, Height = 84, Anchor = TLR };
+            var gb = new GroupBox { Text = "Transmission mode", Left = 10, Top = 184, Width = 700, Height = 58, Anchor = TLR };
             radioSoft = new RadioButton { Text = "Software Serial", Left = 10, Checked = true };
             radioRs = new RadioButton { Text = "RS-232 - serial interface", Left = 130 };
-            radioSio = new RadioButton { Text = "TTL-UART", Left = 300, Enabled = false };
-            var lblBaud = new Label { Text = "Baud:", Left = 425, Top = 27, Width = 35 };
-            comboBaud = new ComboBox { Left = 462, Top = 23, Width = 62, DropDownStyle = ComboBoxStyle.DropDownList };
+            radioSio = new RadioButton { Text = "TTL-UART", Left = 290, Enabled = false };
+            var lblBaud = new Label { Text = "Baud:", Left = 380, Top = 27, Width = 33 };
+            comboBaud = new ComboBox { Left = 414, Top = 23, Width = 56, DropDownStyle = ComboBoxStyle.DropDownList };
             foreach (int b in new[] { 300, 600, 1200, 2400, 4800, 9600, 19200 }) comboBaud.Items.Add(b.ToString());
             comboBaud.SelectedItem = "9600";
-            var lblDelay = new Label { Text = "Line delay (ms):", Left = 532, Top = 27, Width = 82 };
-            numDelay = new NumericUpDown { Left = 616, Top = 23, Width = 45, Minimum = 0, Maximum = 5000, Value = 100, Increment = 50 };
-            var lblEol = new Label { Text = "Line end:", Left = 10, Top = 56, Width = 55 };
-            comboEol = new ComboBox { Left = 68, Top = 52, Width = 70, DropDownStyle = ComboBoxStyle.DropDownList };
+            var lblDelay = new Label { Text = "Line delay:", Left = 474, Top = 27, Width = 60 };
+            numDelay = new NumericUpDown { Left = 536, Top = 23, Width = 40, Minimum = 0, Maximum = 5000, Value = 100, Increment = 50 };
+            var lblEol = new Label { Text = "Line end:", Left = 580, Top = 27, Width = 50 };
+            comboEol = new ComboBox { Left = 631, Top = 23, Width = 60, DropDownStyle = ComboBoxStyle.DropDownList };
             comboEol.Items.AddRange(new object[] { "CR", "CR+LF", "LF" });
             comboEol.SelectedIndex = 1;
-            var lblFlow = new Label { Text = "Flow control:", Left = 160, Top = 56, Width = 75 };
-            comboFlow = new ComboBox { Left = 238, Top = 52, Width = 100, DropDownStyle = ComboBoxStyle.DropDownList };
-            comboFlow.Items.AddRange(new object[] { "None", "XON/XOFF", "RTS/CTS" });
-            comboFlow.SelectedIndex = 1;
-            gb.Controls.AddRange(new Control[] { lblEol, comboEol, lblFlow, comboFlow });
             foreach (RadioButton rb in new[] { radioSoft, radioRs, radioSio })
             {
                 rb.AutoSize = true;      // identical height and text baseline for all three
                 rb.Top = 24;
             }
-            gb.Controls.AddRange(new Control[] { radioSoft, radioRs, radioSio, lblBaud, comboBaud, lblDelay, numDelay });
+            gb.Controls.AddRange(new Control[] { radioSoft, radioRs, radioSio, lblBaud, comboBaud, lblDelay, numDelay, lblEol, comboEol });
 
             var lblDir = new Label { Text = "Folder:", Left = 10, Top = 256, Width = 50 };
             txtDir = new TextBox
@@ -129,7 +124,7 @@ namespace UartSlTest
                 lblDir, txtDir, btnBrowse, btnOpenDir, gbInfo, lstFiles, btnSend, btnSendOther, btnRefreshFiles, btnTerminal, txtLog });
 
             // title row: everything else moves down by one row (40 px)
-            foreach (Control c in Controls) c.Top += c.Top >= 249 ? 66 : 40;   // +40 title row, +26 second row of the Transmission box
+            foreach (Control c in Controls) c.Top += 40;
             {
                 const string titleText = "FILE TRANSFER TOOL FOR PC AND SHARP POCKET COMPUTERS";
                 var titleFont = new Font("Segoe UI", 11F, FontStyle.Bold);
@@ -156,7 +151,6 @@ namespace UartSlTest
             radio1500.CheckedChanged += delegate { if (radio1500.Checked) SetTarget(); };
             radio1600.CheckedChanged += delegate { if (radio1600.Checked) SetTarget(); };
             radioOther.CheckedChanged += delegate { if (radioOther.Checked) SetTarget(); };
-            comboFlow.SelectedIndexChanged += delegate { ApplyFlow(); };
             comboBaud.SelectedIndexChanged += delegate { if (comboBaud.Enabled) savedBaud = (string)comboBaud.SelectedItem; ApplyBaud(); };
             btnBrowse.Click += delegate
             {
@@ -212,7 +206,6 @@ namespace UartSlTest
             tips.SetToolTip(btnRefreshFiles, "Re-read the folder and refresh the file list.");
             tips.SetToolTip(btnTerminal, "Open a terminal window (like TeraTerm): typed characters are sent, received data is shown. Text modes only.");
             tips.SetToolTip(comboEol, "Line end sent after every line of a text file: CR, CR+LF (TeraTerm style) or LF.");
-            tips.SetToolTip(comboFlow, "Flow control for the text modes: None, XON/XOFF (the Sharp can pause the PC) or RTS/CTS. Not used by Software Serial.");
             tips.SetToolTip(txtLog, "Log of transfers and messages.");
 
             timer = new Timer { Interval = 100 };
@@ -279,7 +272,7 @@ namespace UartSlTest
         Handshake FlowMode()
         {
             if (!rs232) return Handshake.None;
-            return comboFlow.SelectedIndex == 1 ? Handshake.XOnXOff : comboFlow.SelectedIndex == 2 ? Handshake.RequestToSend : Handshake.None;
+            return Handshake.XOnXOff;   // always on for the text modes (harmless when the Sharp does not use it)
         }
 
         void ApplyFlow()
@@ -293,7 +286,7 @@ namespace UartSlTest
         void UpdateMode()
         {
             rs232 = radioRs.Checked || radioSio.Checked;
-            comboBaud.Enabled = numDelay.Enabled = btnTerminal.Enabled = comboEol.Enabled = comboFlow.Enabled = rs232;
+            comboBaud.Enabled = numDelay.Enabled = btnTerminal.Enabled = comboEol.Enabled = rs232;
             ApplyFlow();
             // greyed-out combo still shows the real speed of the mode: software serial = 19200 (PC-1600) or 9600 (PC-1500)
             comboBaud.SelectedItem = rs232 ? savedBaud : (radio1500.Checked ? "9600" : "19200");
@@ -471,6 +464,20 @@ namespace UartSlTest
             return path;
         }
 
+        int progStart, progEnd;
+        string progText;
+
+        // keeps one log line up to date while a file is being sent: "SENDING name (n B) (37%)"
+        void SetProgress(int pct)
+        {
+            if (txtLog.TextLength != progEnd) return;      // other messages were logged meanwhile: leave them alone
+            string line = DateTime.Now.ToString("HH:mm:ss") + "  " + progText + " (" + pct + "%)\r\n";
+            txtLog.Text = txtLog.Text.Substring(0, progStart) + line;
+            progEnd = txtLog.TextLength;
+            txtLog.SelectionStart = txtLog.TextLength;
+            txtLog.ScrollToCaret();
+        }
+
         async void SendFile(string path)
         {
             if (port == null || !port.IsOpen) { Log("Open the port first."); return; }
@@ -490,7 +497,17 @@ namespace UartSlTest
             }
             sending = true;
             btnSend.Enabled = btnSendOther.Enabled = false;
-            Log("SENDING " + Path.GetFileName(path) + " (" + data.Length + " B)...");
+            progText = "SENDING " + Path.GetFileName(path) + " (" + data.Length + " B)";
+            progStart = txtLog.TextLength;
+            Log(progText + " (0%)");
+            progEnd = txtLog.TextLength;
+            int total = data.Length, lastPct = -1;
+            Action<int> report = pct =>
+            {
+                if (pct == lastPct) return;
+                lastPct = pct;
+                try { BeginInvoke(new Action(() => SetProgress(pct))); } catch { }
+            };
             try
             {
                 var p = port;
@@ -500,6 +517,11 @@ namespace UartSlTest
                     if (!text)
                     {
                         p.Write(data, 0, data.Length);
+                        while (p.BytesToWrite > 0)
+                        {
+                            report(100 * (total - p.BytesToWrite) / total);
+                            System.Threading.Thread.Sleep(50);
+                        }
                     }
                     else
                     {
@@ -515,6 +537,7 @@ namespace UartSlTest
                                     p.Write(line.ToArray(), 0, line.Count);
                                     line.Clear();
                                     while (p.BytesToWrite > 0) System.Threading.Thread.Sleep(5);
+                                    report(100 * i / total);
                                     System.Threading.Thread.Sleep(delay);
                                 }
                             }
@@ -522,6 +545,7 @@ namespace UartSlTest
                         }
                     }
                     while (p.BytesToWrite > 0) System.Threading.Thread.Sleep(10);
+                    report(100);
                 });
                 Log(text ? "Sent." : "Sent. The PC-1600 finishes after 0.5 s of silence; check X=1 (PRINT X) and LIST.");
             }
