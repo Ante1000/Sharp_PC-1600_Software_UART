@@ -115,18 +115,18 @@ namespace UartSlTest
             gbInfo.Controls.Add(lblHint);
 
             var gbFiles = new GroupBox { Text = "Files", Left = 10, Top = 366, Width = 565, Height = 176, Anchor = TLR };   // bottom edge = bottom of the Terminal button
-            lstFiles = new ListBox { Left = 6, Top = 16, Width = 553, Height = 134, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
+            lstFiles = new ListBox { Left = 6, Top = 16, Width = 553, Height = 126, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
             chkPad = new CheckBox { Text = "Add dummy last line", Left = 8, Top = 152, Width = 140 };
             chkEof = new CheckBox { Text = "Add EOF marker", Left = 150, Top = 152, Width = 110, Checked = true };
             chkAuto = new CheckBox { Text = "Auto tokenize", Left = 262, Top = 152, Width = 108, Checked = true };
             btnAbort = Btn("Abort", Icons.Cross(), 468, 148, 90, 24, TR);
             btnConvert = Btn("Convert", Icons.File(), 374, 148, 90, 24, TR);
             gbFiles.Controls.AddRange(new Control[] { lstFiles, chkPad, chkEof, chkAuto, btnConvert, btnAbort });
-            btnSend = Btn("Send selected", Icons.Plane(), 585, 366, 125, 30, TR);
-            btnSendOther = Btn("Send file...", Icons.File(), 585, 400, 125, 30, TR);
-            btnRefreshFiles = Btn("Refresh list", Icons.Refresh(), 585, 434, 125, 30, TR);
-            btnDelete = Btn("Delete file", Icons.Cross(), 585, 476, 125, 30, TR);
-            btnTerminal = Btn("Terminal", Icons.Terminal(), 585, 514, 125, 28, TR);
+            btnSend = Btn("Send selected", Icons.Plane(), 585, 366, 125, 32, TR);
+            btnSendOther = Btn("Send file...", Icons.File(), 585, 402, 125, 32, TR);
+            btnRefreshFiles = Btn("Refresh list", Icons.Refresh(), 585, 438, 125, 32, TR);
+            btnDelete = Btn("Delete file", Icons.Cross(), 585, 474, 125, 32, TR);
+            btnTerminal = Btn("Terminal", Icons.Terminal(), 585, 510, 125, 32, TR);
 
             var gbLog = new GroupBox
             {
