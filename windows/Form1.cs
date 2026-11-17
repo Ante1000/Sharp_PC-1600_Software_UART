@@ -46,8 +46,8 @@ namespace UartSlTest
         {
             return new Button
             {
-                Text = "  " + text, Image = img, ImageAlign = ContentAlignment.MiddleLeft,
-                TextAlign = ContentAlignment.MiddleCenter, Left = x, Top = y, Width = w, Height = h, Anchor = anchor
+                Text = text, Image = img, ImageAlign = ContentAlignment.MiddleLeft,
+                TextAlign = ContentAlignment.MiddleRight, Padding = new Padding(0, 0, 6, 0), Left = x, Top = y, Width = w, Height = h, Anchor = anchor
             };
         }
 
@@ -63,7 +63,7 @@ namespace UartSlTest
             btnOpen = Btn("Open port", Icons.Plug(), 258, 9, 85, 28, TL);
             led = new LedLabel { Left = 348, Top = 11, Width = 85, Height = 26 };
             var gbTarget = new GroupBox { Text = "Target computer", Left = 438, Top = 0, Width = 272, Height = 42, Anchor = TR };
-            radio1500 = new RadioButton { Text = "PC-1500", Left = 8, Top = 16, Width = 70, Enabled = false };   // not available yet
+            radio1500 = new RadioButton { Text = "PC-1500", Left = 8, Top = 16, Width = 70 };
             radio1600 = new RadioButton { Text = "PC-1600", Left = 80, Top = 16, Width = 70, Checked = true };
             radioOther = new RadioButton { Text = "Other 15-pin SIO", Left = 152, Top = 16, Width = 116 };
             gbTarget.Controls.AddRange(new Control[] { radio1500, radio1600, radioOther });
@@ -71,19 +71,19 @@ namespace UartSlTest
             banner = new BannerPanel { Left = 10, Top = 46, Width = 700, Height = 132, Anchor = TLR };
 
             var gb = new GroupBox { Text = "Transmission mode", Left = 10, Top = 184, Width = 700, Height = 58, Anchor = TLR };
-            radioSoft = new RadioButton { Text = "Software serial (19200 8N1, binary)", Left = 10, Top = 24, Width = 200, Checked = true };
-            radioRs = new RadioButton { Text = "RS-232 (serial port, text)", Left = 212, Top = 24, Width = 150 };
-            radioSio = new RadioButton { Text = "TTL-UART SIO", Left = 364, Top = 24, Width = 98, Enabled = false };
-            var lblBaud = new Label { Text = "Baud:", Left = 466, Top = 27, Width = 35 };
-            comboBaud = new ComboBox { Left = 502, Top = 23, Width = 62, DropDownStyle = ComboBoxStyle.DropDownList };
+            radioSoft = new RadioButton { Text = "Software Serial", Left = 10, Checked = true };
+            radioRs = new RadioButton { Text = "RS-232 (serial port, text)", Left = 130 };
+            radioSio = new RadioButton { Text = "TTL-UART (text)", Left = 300, Enabled = false };
+            var lblBaud = new Label { Text = "Baud:", Left = 425, Top = 27, Width = 35 };
+            comboBaud = new ComboBox { Left = 462, Top = 23, Width = 62, DropDownStyle = ComboBoxStyle.DropDownList };
             foreach (int b in new[] { 300, 600, 1200, 2400, 4800, 9600, 19200 }) comboBaud.Items.Add(b.ToString());
             comboBaud.SelectedItem = "9600";
-            var lblDelay = new Label { Text = "Line delay (ms):", Left = 570, Top = 27, Width = 82 };
-            numDelay = new NumericUpDown { Left = 652, Top = 23, Width = 45, Minimum = 0, Maximum = 5000, Value = 100, Increment = 50 };
+            var lblDelay = new Label { Text = "Line delay (ms):", Left = 532, Top = 27, Width = 82 };
+            numDelay = new NumericUpDown { Left = 616, Top = 23, Width = 45, Minimum = 0, Maximum = 5000, Value = 100, Increment = 50 };
             foreach (RadioButton rb in new[] { radioSoft, radioRs, radioSio })
             {
-                rb.Top = 22; rb.Height = 22;
-                rb.TextAlign = ContentAlignment.MiddleLeft; rb.CheckAlign = ContentAlignment.MiddleLeft;
+                rb.AutoSize = true;      // identical height and text baseline for all three
+                rb.Top = 24;
             }
             gb.Controls.AddRange(new Control[] { radioSoft, radioRs, radioSio, lblBaud, comboBaud, lblDelay, numDelay });
 
@@ -93,7 +93,7 @@ namespace UartSlTest
                 Left = 65, Top = 252, Width = 460, Anchor = TLR,
                 Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "PC1600")
             };
-            btnBrowse = Btn("Browse...", Icons.Folder(), 535, 249, 85, 28, TR);
+            btnBrowse = Btn("Browse...", Icons.Folder(), 530, 249, 92, 28, TR);
             btnOpenDir = Btn("Open", Icons.Folder(), 628, 249, 82, 28, TR);
 
             lblHint = new Label { Left = 10, Top = 284, Width = 700, Height = 48, Anchor = TLR, BorderStyle = BorderStyle.FixedSingle, Padding = new Padding(4) };
@@ -115,14 +115,18 @@ namespace UartSlTest
 
             // title row: everything else moves down by one row (40 px)
             foreach (Control c in Controls) c.Top += 40;
-            Controls.Add(new PictureBox { Image = Icons.Comet(32), SizeMode = PictureBoxSizeMode.AutoSize, Left = 10, Top = 4 });
-            Controls.Add(new Label
             {
-                Text = "FILE TRANSFER TOOL FOR PC AND SHARP POCKET COMPUTERS",
-                Left = 50, Top = 8, Width = 660, Height = 26, Anchor = TLR,
-                TextAlign = ContentAlignment.MiddleLeft,
-                Font = new Font("Segoe UI", 11F, FontStyle.Bold), ForeColor = Color.FromArgb(30, 70, 120)
-            });
+                const string titleText = "FILE TRANSFER TOOL FOR PC AND SHARP POCKET COMPUTERS";
+                var titleFont = new Font("Segoe UI", 11F, FontStyle.Bold);
+                Size ts = TextRenderer.MeasureText(titleText, titleFont);
+                int x0 = (ClientSize.Width - (32 + 8 + ts.Width)) / 2;
+                Controls.Add(new PictureBox { Image = Icons.Comet(32), SizeMode = PictureBoxSizeMode.AutoSize, Left = x0, Top = 4, Anchor = AnchorStyles.Top });
+                Controls.Add(new Label
+                {
+                    Text = titleText, AutoSize = true, Font = titleFont, ForeColor = Color.FromArgb(30, 70, 120),
+                    Left = x0 + 40, Top = 4 + (32 - ts.Height) / 2, Anchor = AnchorStyles.Top
+                });
+            }
 
 
             btnRefresh.Click += delegate { RefreshPorts(); };
@@ -171,14 +175,29 @@ namespace UartSlTest
         void SetTarget()
         {
             bool other = radioOther.Checked;
+            bool p1500 = radio1500.Checked;
             radioSoft.Enabled = radioRs.Enabled = !other;
             radioSio.Enabled = other;
+            radioRs.Text = p1500 ? "RS-232 - CE-158(X)" : "RS-232 (serial port, text)";
             if (other) radioSio.Checked = true;
             else if (radioSio.Checked) radioSoft.Checked = true;
-            banner.ModelName = other ? "Other Sharp" : radio1500.Checked ? "Sharp PC-1500" : "Sharp PC-1600";
+            banner.ModelName = other ? "Other Sharp" : p1500 ? "Sharp PC-1500" : "Sharp PC-1600";
             banner.Invalidate();
-            SetDefaultDir(other ? "PC_15-pin" : radio1500.Checked ? "PC1500" : "PC1600");
+            SetDefaultDir(other ? "PC_15-pin" : p1500 ? "PC1500" : "PC1600");
             UpdateMode();
+        }
+
+        string HintText()
+        {
+            if (radioSio.Checked)
+                return "Other Sharp models through the 15-pin connector (TTL-UART SIO + USB/COM adapter), like TeraTerm. RECEIVE: send the program as text from the pocket computer (same baud rate on both sides); the file is saved after 3 s of silence.\r\nSEND: start receiving on the pocket computer first, then press Send. Lines are sent one by one with the delay set above.";
+            if (radio1500.Checked && radioRs.Checked)
+                return "PC-1500 with the CE-158(X) RS-232 interface (text, same baud rate on both sides). RECEIVE: the file is saved after 3 s of silence, named after the first REM line.\r\nSEND: start receiving on the PC-1500 first, then press Send. Lines are sent one by one with the delay set above.";
+            if (radio1500.Checked)
+                return "PC-1500 software serial (Saver/Loader for the PC-1500) is not implemented yet. Use RS-232 - CE-158(X).";
+            if (radioRs.Checked)
+                return "RECEIVE: send the program as text from the PC-1600 through its RS-232 port (same baud rate on both sides). The file is saved after 3 s of silence, named after the first REM line.\r\nSEND: start receiving on the PC-1600 first, then press Send. Lines are sent one by one with the delay set above.";
+            return "RECEIVE: on the PC-1600 run SAVE (CALL addr,X). The file is saved automatically, named after the first REM.\r\nSEND: run LOAD on the PC-1600 first (CALL addr+176,X), then press Send (30 s to start).";
         }
 
         void SetDefaultDir(string sub)
@@ -195,11 +214,7 @@ namespace UartSlTest
         {
             rs232 = radioRs.Checked || radioSio.Checked;
             comboBaud.Enabled = numDelay.Enabled = rs232;
-            lblHint.Text = radioSio.Checked
-                ? "Other Sharp models through the 15-pin connector (TTL-UART SIO + USB/COM adapter), like TeraTerm. RECEIVE: send the program as text from the pocket computer (same baud rate on both sides); the file is saved after 3 s of silence.\r\nSEND: start receiving on the pocket computer first, then press Send. Lines are sent one by one with the delay set above."
-                : rs232
-                ? "RECEIVE: send the program as text from the PC-1600 through its RS-232 port (same baud rate on both sides). The file is saved after 3 s of silence, named after the first REM line.\r\nSEND: start receiving on the PC-1600 first, then press Send. Lines are sent one by one with the delay set above."
-                : "RECEIVE: on the PC-1600 run SAVE (CALL addr,X). The file is saved automatically, named after the first REM.\r\nSEND: run LOAD on the PC-1600 first (CALL addr+176,X), then press Send (30 s to start).";
+            lblHint.Text = HintText();
             ApplyBaud();
             RefreshFiles();
         }
@@ -254,7 +269,7 @@ namespace UartSlTest
                 port.ReadBufferSize = 65536;
                 port.DataReceived += OnData;
                 port.Open();
-                btnOpen.Text = "  Close port";
+                btnOpen.Text = "Close port";
                 btnOpen.Image = Icons.Cross();
                 SetStatus(true);
                 Log("Port " + name + " open (" + port.BaudRate + " 8N1).");
@@ -271,7 +286,7 @@ namespace UartSlTest
             if (port == null) return;
             try { port.DataReceived -= OnData; if (port.IsOpen) port.Close(); } catch { }
             port = null;
-            btnOpen.Text = "  Open port";
+            btnOpen.Text = "Open port";
             btnOpen.Image = Icons.Plug();
             banner.PortOpen = false;
             banner.Invalidate();
