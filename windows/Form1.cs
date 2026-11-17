@@ -115,6 +115,7 @@ namespace UartSlTest
         public static Bitmap Folder() { return Make((g, p, b) => { g.FillRectangle(b, 2, 6, 16, 11); g.FillRectangle(b, 2, 4, 7, 3); }); }
         public static Bitmap Plane() { return Make((g, p, b) => { g.FillPolygon(b, new[] { new Point(2, 10), new Point(18, 3), new Point(13, 17), new Point(10, 12) }); }); }
         public static Bitmap File() { return Make((g, p, b) => { g.DrawRectangle(p, 5, 2, 10, 16); g.DrawLine(p, 8, 8, 12, 8); g.DrawLine(p, 8, 12, 12, 12); }); }
+        // application icon: a comet (bright head, tail pointing to the upper left)
         public static Icon AppIcon()
         {
             using (var bmp = new Bitmap(32, 32))
@@ -122,11 +123,19 @@ namespace UartSlTest
             {
                 g.SmoothingMode = SmoothingMode.AntiAlias;
                 g.Clear(Color.Transparent);
-                using (var b = new SolidBrush(Color.FromArgb(30, 70, 120))) g.FillEllipse(b, 1, 1, 30, 30);
-                using (var b = new SolidBrush(Color.FromArgb(150, 220, 255)))
+                using (var b = new SolidBrush(Color.FromArgb(18, 40, 80))) g.FillEllipse(b, 0, 0, 31, 31);
+                using (var b = new SolidBrush(Color.FromArgb(255, 255, 255))) { g.FillRectangle(b, 6, 7, 1, 1); g.FillRectangle(b, 24, 6, 1, 1); g.FillRectangle(b, 9, 25, 1, 1); }
+                using (var b = new SolidBrush(Color.FromArgb(110, 150, 215, 255)))      // wide tail
+                    g.FillPolygon(b, new[] { new PointF(23, 15), new PointF(15, 23), new PointF(3, 4) });
+                using (var b = new SolidBrush(Color.FromArgb(150, 210, 240, 255)))      // inner tail
+                    g.FillPolygon(b, new[] { new PointF(22, 18), new PointF(18, 22), new PointF(7, 8) });
+                using (var p = new Pen(Color.FromArgb(180, 190, 235, 255), 1f))         // streaks
                 {
-                    g.FillPolygon(b, new[] { new Point(6, 11), new Point(18, 11), new Point(18, 7), new Point(26, 14), new Point(18, 21), new Point(18, 17), new Point(6, 17) });
+                    g.DrawLine(p, 17, 12, 8, 16);
+                    g.DrawLine(p, 20, 15, 16, 4);
                 }
+                using (var b = new SolidBrush(Color.FromArgb(90, 255, 240, 170))) g.FillEllipse(b, 14, 14, 15, 15);   // glow
+                using (var b = new SolidBrush(Color.FromArgb(255, 252, 215))) g.FillEllipse(b, 17, 17, 9, 9);        // head
                 return Icon.FromHandle(bmp.GetHicon());
             }
         }
