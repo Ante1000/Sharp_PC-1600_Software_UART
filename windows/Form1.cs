@@ -21,6 +21,8 @@ namespace UartSlTest
 
         BannerPanel banner;
         ComboBox comboPorts, comboBaud;
+        TerminalForm term;
+        Button btnTerminal;
         Button btnRefresh, btnOpen, btnBrowse, btnOpenDir, btnSend, btnSendOther, btnRefreshFiles;
         TextBox txtDir, txtLog;
         ListBox lstFiles;
@@ -101,19 +103,20 @@ namespace UartSlTest
             gbInfo.Controls.Add(lblHint);
 
             lstFiles = new ListBox { Left = 10, Top = 340, Width = 565, Height = 110, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
-            btnSend = Btn("Send selected", Icons.Plane(), 585, 340, 125, 34, TR);
-            btnSendOther = Btn("Send file...", Icons.File(), 585, 380, 125, 34, TR);
-            btnRefreshFiles = Btn("Refresh list", Icons.Refresh(), 585, 420, 125, 30, TR);
+            btnSend = Btn("Send selected", Icons.Plane(), 585, 340, 125, 30, TR);
+            btnSendOther = Btn("Send file...", Icons.File(), 585, 374, 125, 30, TR);
+            btnRefreshFiles = Btn("Refresh list", Icons.Refresh(), 585, 408, 125, 30, TR);
+            btnTerminal = Btn("Terminal", Icons.Terminal(), 585, 442, 125, 28, TR);
 
             txtLog = new TextBox
             {
-                Left = 10, Top = 460, Width = 700, Height = 130, Multiline = true,
+                Left = 10, Top = 476, Width = 700, Height = 114, Multiline = true,
                 ScrollBars = ScrollBars.Vertical, ReadOnly = true, Font = new Font("Consolas", 9F),
                 Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
             };
 
             Controls.AddRange(new Control[] { lblPort, comboPorts, btnRefresh, btnOpen, led, gbTarget, banner, gb,
-                lblDir, txtDir, btnBrowse, btnOpenDir, gbInfo, lstFiles, btnSend, btnSendOther, btnRefreshFiles, txtLog });
+                lblDir, txtDir, btnBrowse, btnOpenDir, gbInfo, lstFiles, btnSend, btnSendOther, btnRefreshFiles, btnTerminal, txtLog });
 
             // title row: everything else moves down by one row (40 px)
             foreach (Control c in Controls) c.Top += 40;
@@ -128,6 +131,9 @@ namespace UartSlTest
                     Text = titleText, AutoSize = true, Font = titleFont, ForeColor = Color.FromArgb(30, 70, 120),
                     Left = x0 + 40, Top = 4 + (32 - ts.Height) / 2, Anchor = AnchorStyles.Top
                 });
+                var about = new LinkLabel { Text = "About", AutoSize = true, Left = 665, Top = 12, Anchor = AnchorStyles.Top | AnchorStyles.Right };
+                about.LinkClicked += delegate { using (var d = new AboutForm()) d.ShowDialog(this); };
+                Controls.Add(about);
             }
 
 
@@ -154,6 +160,7 @@ namespace UartSlTest
                 catch (Exception ex) { Log("Error: " + ex.Message); }
             };
             btnRefreshFiles.Click += delegate { RefreshFiles(); };
+            btnTerminal.Click += delegate { OpenTerminal(); };
             btnSend.Click += delegate
             {
                 if (lstFiles.SelectedItem == null) { Log("Select a file in the list."); return; }
@@ -209,13 +216,32 @@ namespace UartSlTest
             Log("Folder: " + txtDir.Text);
         }
 
+        void OpenTerminal()
+        {
+            if (port == null || !port.IsOpen) { Log("Open the port first."); return; }
+            if (!rs232) { Log("The terminal works in RS-232 and TTL-UART modes."); return; }
+            if (term != null) { term.Activate(); return; }
+            lock (rxLock) { rx.Clear(); }
+            term = new TerminalForm("SerComet Terminal - " + port.PortName + " " + port.BaudRate + " 8N1", SendRaw);
+            term.FormClosed += delegate { term = null; Log("Terminal closed."); };
+            term.Show(this);
+            Log("Terminal open: typed characters are sent immediately, received data is shown live.");
+        }
+
+        void SendRaw(byte[] b)
+        {
+            try { if (port != null && port.IsOpen) port.Write(b, 0, b.Length); }
+            catch (Exception ex) { Log("Send error: " + ex.Message); }
+        }
+
         string Ext { get { return rs232 ? ".bas" : ".sl16"; } }
         int Baud { get { return rs232 ? int.Parse((string)comboBaud.SelectedItem) : 19200; } }
 
         void UpdateMode()
         {
             rs232 = radioRs.Checked || radioSio.Checked;
-            comboBaud.Enabled = numDelay.Enabled = rs232;
+            comboBaud.Enabled = numDelay.Enabled = btnTerminal.Enabled = rs232;
+            if (!rs232 && term != null) term.Close();
             lblHint.Text = HintText();
             ApplyBaud();
             RefreshFiles();
@@ -286,6 +312,7 @@ namespace UartSlTest
         void ClosePort()
         {
             if (port == null) return;
+            if (term != null) term.Close();
             try { port.DataReceived -= OnData; if (port.IsOpen) port.Close(); } catch { }
             port = null;
             btnOpen.Text = "Open port";
@@ -305,6 +332,13 @@ namespace UartSlTest
                 if (n <= 0) return;
                 var buf = new byte[n];
                 n = p.Read(buf, 0, n);
+                if (n != buf.Length) Array.Resize(ref buf, n);
+                var t = term;
+                if (t != null)
+                {
+                    try { t.BeginInvoke(new Action(() => t.Rx(buf))); } catch { }
+                    return;
+                }
                 if (sending) return;
                 lock (rxLock)
                 {
@@ -385,6 +419,7 @@ namespace UartSlTest
         {
             if (port == null || !port.IsOpen) { Log("Open the port first."); return; }
             if (sending) return;
+            if (term != null) { Log("Close the terminal first."); return; }
             byte[] data;
             try { data = File.ReadAllBytes(path); }
             catch (Exception ex) { Log("Read error: " + ex.Message); return; }
@@ -545,6 +580,7 @@ namespace UartSlTest
         public static Bitmap Plug() { return Make((g, p, b) => { g.FillRectangle(b, 5, 9, 10, 7); g.DrawLine(p, 8, 3, 8, 9); g.DrawLine(p, 12, 3, 12, 9); }); }
         public static Bitmap Cross() { return Make((g, p, b) => { g.DrawLine(p, 5, 5, 15, 15); g.DrawLine(p, 15, 5, 5, 15); }); }
         public static Bitmap Folder() { return Make((g, p, b) => { g.FillRectangle(b, 2, 6, 16, 11); g.FillRectangle(b, 2, 4, 7, 3); }); }
+        public static Bitmap Terminal() { return Make((g, p, b) => { g.DrawRectangle(p, 2, 3, 16, 13); g.DrawLine(p, 5, 7, 8, 10); g.DrawLine(p, 5, 13, 8, 10); g.DrawLine(p, 10, 13, 14, 13); }); }
         public static Bitmap Plane() { return Make((g, p, b) => { g.FillPolygon(b, new[] { new Point(2, 10), new Point(18, 3), new Point(13, 17), new Point(10, 12) }); }); }
         public static Bitmap File() { return Make((g, p, b) => { g.DrawRectangle(p, 5, 2, 10, 16); g.DrawLine(p, 8, 8, 12, 8); g.DrawLine(p, 8, 12, 12, 12); }); }
         // shooting star (yellow star head, curved light-blue forked tail) on a navy sky, drawn at any size
@@ -749,6 +785,124 @@ namespace UartSlTest
             Led(g, ok, mid - 18, top + 96);
             Led(g, ok, mid, top + 96);
             Led(g, Sending || Receiving ? Color.FromArgb(240, 60, 50) : Color.FromArgb(90, 90, 100), mid + 18, top + 96);
+        }
+    }
+
+    // Simple terminal (like TeraTerm): typed characters go out at once, received data is shown live
+    public class TerminalForm : Form
+    {
+        readonly TextBox txt;
+        readonly CheckBox chkEcho;
+        readonly ComboBox comboNl;
+        readonly Action<byte[]> send;
+        bool lastCr;
+
+        public TerminalForm(string title, Action<byte[]> send)
+        {
+            this.send = send;
+            Text = title;
+            ClientSize = new Size(640, 420);
+            StartPosition = FormStartPosition.CenterParent;
+            try { Icon = Icons.AppIcon(); } catch { }
+
+            var top = new Panel { Dock = DockStyle.Top, Height = 34 };
+            chkEcho = new CheckBox { Text = "Local echo", Left = 8, Top = 8, Width = 90 };
+            var lbl = new Label { Text = "Enter sends:", Left = 110, Top = 11, Width = 72 };
+            comboNl = new ComboBox { Left = 185, Top = 6, Width = 70, DropDownStyle = ComboBoxStyle.DropDownList };
+            comboNl.Items.AddRange(new object[] { "CR", "CR+LF", "LF" });
+            comboNl.SelectedIndex = 0;
+            var btnClear = new Button { Text = "Clear", Left = 270, Top = 5, Width = 70, Height = 24 };
+            btnClear.Click += delegate { txt.Clear(); txt.Focus(); };
+            top.Controls.AddRange(new Control[] { chkEcho, lbl, comboNl, btnClear });
+
+            txt = new TextBox { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Vertical, Font = new Font("Consolas", 10F), ReadOnly = true, WordWrap = true };
+            txt.BackColor = Color.Black;
+            txt.ForeColor = Color.Gainsboro;
+            txt.KeyPress += OnKeyPress;
+            txt.KeyDown += OnKeyDown;
+            Controls.Add(txt);
+            Controls.Add(top);
+            Shown += delegate { txt.Focus(); };
+        }
+
+        string Newline() { return comboNl.SelectedIndex == 1 ? "\r\n" : comboNl.SelectedIndex == 2 ? "\n" : "\r"; }
+
+        void SendChars(string t)
+        {
+            var b = new List<byte>();
+            foreach (char c in t) b.Add(c < 256 ? (byte)c : (byte)'?');
+            if (b.Count == 0) return;
+            send(b.ToArray());
+            if (chkEcho.Checked) Rx(b.ToArray());
+        }
+
+        void OnKeyPress(object sender, KeyPressEventArgs e)
+        {
+            e.Handled = true;
+            char c = e.KeyChar;
+            if (c == '\r') SendChars(Newline());
+            else if (c == '\b' || c == '\t' || c >= 32) SendChars(c.ToString());
+        }
+
+        void OnKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Control && e.KeyCode == Keys.V && Clipboard.ContainsText())
+            {
+                e.SuppressKeyPress = true;
+                SendChars(Clipboard.GetText().Replace("\r\n", "\n").Replace("\n", Newline()));
+            }
+        }
+
+        // received bytes -> text (CR or LF = new line, BS erases, other control codes are ignored)
+        public void Rx(byte[] data)
+        {
+            var sb = new StringBuilder();
+            foreach (byte c in data)
+            {
+                if (c == 13) { sb.Append("\r\n"); lastCr = true; continue; }
+                if (c == 10) { if (!lastCr) sb.Append("\r\n"); lastCr = false; continue; }
+                lastCr = false;
+                if (c == 8) { if (sb.Length > 0) sb.Length--; }
+                else if (c == 9 || c >= 32) sb.Append((char)c);
+            }
+            txt.AppendText(sb.ToString());
+            if (txt.TextLength > 200000) { txt.Text = txt.Text.Substring(txt.TextLength - 100000); txt.SelectionStart = txt.TextLength; txt.ScrollToCaret(); }
+        }
+    }
+
+    // About window
+    public class AboutForm : Form
+    {
+        public AboutForm()
+        {
+            Text = "About SerComet";
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MaximizeBox = MinimizeBox = false;
+            ShowInTaskbar = false;
+            StartPosition = FormStartPosition.CenterParent;
+            ClientSize = new Size(380, 300);
+
+            Controls.Add(new PictureBox { Image = Icons.Comet(72), SizeMode = PictureBoxSizeMode.AutoSize, Left = (380 - 72) / 2, Top = 16 });
+            AddLine("SerComet", 100, new Font("Segoe UI", 16F, FontStyle.Bold), Color.FromArgb(30, 70, 120));
+            AddLine("File transfer tool for PC and Sharp pocket computers", 138, new Font("Segoe UI", 9F), Color.Black);
+            AddLine("Author: Alex F4VTS", 170, new Font("Segoe UI", 10F), Color.Black);
+            AddLine("Copyright \u00A9 2026", 194, new Font("Segoe UI", 10F), Color.Black);
+            AddLine("License: GNU General Public License v3.0", 218, new Font("Segoe UI", 10F), Color.Black);
+            var web = new LinkLabel { Text = "Web: github.com/Ante1000", Left = 0, Top = 242, Width = 380, Height = 20, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Segoe UI", 10F) };
+            web.Links.Add(5, 19, "https://github.com/Ante1000");
+            web.LinkClicked += delegate (object s, LinkLabelLinkClickedEventArgs e)
+            {
+                try { System.Diagnostics.Process.Start((string)e.Link.LinkData); } catch { }
+            };
+            Controls.Add(web);
+            var ok = new Button { Text = "OK", Left = (380 - 80) / 2, Top = 268, Width = 80, DialogResult = DialogResult.OK };
+            Controls.Add(ok);
+            AcceptButton = ok;
+        }
+
+        void AddLine(string text, int top, Font font, Color color)
+        {
+            Controls.Add(new Label { Text = text, Left = 0, Top = top, Width = 380, Height = 24, TextAlign = ContentAlignment.MiddleCenter, Font = font, ForeColor = color });
         }
     }
 }
