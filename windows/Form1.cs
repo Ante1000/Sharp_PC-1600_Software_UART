@@ -60,7 +60,7 @@ namespace UartSlTest
             const AnchorStyles TR = AnchorStyles.Top | AnchorStyles.Right;
             const AnchorStyles TLR = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
 
-            var lblPort = new Label { Text = "Port:", Left = 10, Top = 16, Width = 40 };
+            var lblPort = new Label { Text = "Port:", Left = 22, Top = 16, Width = 40 };
             comboPorts = new ComboBox { Left = 55, Top = 12, Width = 100, DropDownStyle = ComboBoxStyle.DropDownList };
             btnRefresh = Btn("Refresh", Icons.Refresh(), 165, 9, 85, 28, TL);
             btnOpen = Btn("Open port", Icons.Plug(), 258, 9, 85, 28, TL);
@@ -99,19 +99,19 @@ namespace UartSlTest
             btnBrowse = Btn("Browse...", Icons.Folder(), 530, 249, 92, 28, TR);
             btnOpenDir = Btn("Open", Icons.Folder(), 628, 249, 82, 28, TR);
 
-            var gbInfo = new GroupBox { Text = "Info", Left = 10, Top = 280, Width = 700, Height = 58, Anchor = TLR };
-            lblHint = new Label { Left = 8, Top = 14, Width = 684, Height = 41, Anchor = TLR };
+            var gbInfo = new GroupBox { Text = "Info", Left = 10, Top = 280, Width = 700, Height = 84, Anchor = TLR };
+            lblHint = new Label { Left = 8, Top = 14, Width = 684, Height = 67, Anchor = TLR };
             gbInfo.Controls.Add(lblHint);
 
-            lstFiles = new ListBox { Left = 10, Top = 340, Width = 565, Height = 110, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
-            btnSend = Btn("Send selected", Icons.Plane(), 585, 340, 125, 30, TR);
-            btnSendOther = Btn("Send file...", Icons.File(), 585, 374, 125, 30, TR);
-            btnRefreshFiles = Btn("Refresh list", Icons.Refresh(), 585, 408, 125, 30, TR);
-            btnTerminal = Btn("Terminal", Icons.Terminal(), 585, 442, 125, 28, TR);
+            lstFiles = new ListBox { Left = 10, Top = 366, Width = 565, Height = 110, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
+            btnSend = Btn("Send selected", Icons.Plane(), 585, 366, 125, 30, TR);
+            btnSendOther = Btn("Send file...", Icons.File(), 585, 400, 125, 30, TR);
+            btnRefreshFiles = Btn("Refresh list", Icons.Refresh(), 585, 434, 125, 30, TR);
+            btnTerminal = Btn("Terminal", Icons.Terminal(), 585, 468, 125, 28, TR);
 
             txtLog = new TextBox
             {
-                Left = 10, Top = 476, Width = 700, Height = 114, Multiline = true,
+                Left = 10, Top = 502, Width = 700, Height = 114, Multiline = true,
                 ScrollBars = ScrollBars.Vertical, ReadOnly = true, Font = new Font("Consolas", 9F),
                 Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
             };
@@ -177,7 +177,7 @@ namespace UartSlTest
                 }
             };
 
-            tips.SetToolTip(comboPorts, "Serial (COM) port of the USB adapter connected to the Sharp.");
+            tips.SetToolTip(comboPorts, "Select a COM port, or the virtual COM port created by a USB adapter (FTDI) connected to the Sharp.");
             tips.SetToolTip(btnRefresh, "Re-scan the list of available COM ports.");
             tips.SetToolTip(btnOpen, "Open or close the selected COM port.");
             tips.SetToolTip(led, "Port status: green = open, dark = closed.");
@@ -188,7 +188,11 @@ namespace UartSlTest
             tips.SetToolTip(radioRs, "Classic RS-232 text transfer, like a terminal program. The baud rate is selectable.");
             tips.SetToolTip(radioSio, "TTL-UART SIO text transfer through the 15-pin connector. The baud rate is selectable.");
             tips.SetToolTip(comboBaud, "Baud rate (8N1). Fixed and greyed out for Software Serial, selectable for the text modes.");
-            tips.SetToolTip(numDelay, "Pause after each line when a text file is sent, in milliseconds.");
+            tips.SetToolTip(numDelay, "Pause after each line sent from a text file, in ms (the Sharp needs time to store a line).\r\n" +
+                "Suggested starting values (tune by testing, raise it if lines are lost or garbled):\r\n" +
+                "  PC-1500 (CE-158): 200 ms\r\n  PC-1600: 100 ms\r\n  15-pin models: 100 ms\r\n" +
+                "The value is preset when you choose the target computer.\r\n" +
+                "Note: a published PC-1600 setup (9600 baud, XON/XOFF) uses a delay of 2/60 s per character and 0 per line; this program delays per line only.");
             tips.SetToolTip(txtDir, "Folder where received files are saved and listed from.");
             tips.SetToolTip(btnBrowse, "Choose another folder.");
             tips.SetToolTip(btnOpenDir, "Open the folder in Windows Explorer.");
@@ -216,6 +220,7 @@ namespace UartSlTest
             else if (radioSio.Checked) radioSoft.Checked = true;
             banner.ModelName = other ? "Sharp with 15-pin connector" : p1500 ? "Sharp PC-1500" : "Sharp PC-1600";
             banner.Invalidate();
+            numDelay.Value = p1500 ? 200 : 100;   // suggested starting values, adjust by testing
             SetDefaultDir(other ? "PC_15-pin" : p1500 ? "PC1500" : "PC1600");
             UpdateMode();
         }
