@@ -10,315 +10,6 @@ using System.Windows.Forms;
 
 namespace UartSlTest
 {
-    // .sl16 file = exactly the stream sent by SAVE: BASIC program bytes + 1 checksum byte (sum mod 256).
-    // Line: [line number 2 B][length 1 B][content, ends with 0D]. The end marker (FF) is not stored.
-    public static class Sl16
-    {
-        public static bool Check(byte[] s, out string err)
-        {
-            err = null;
-            if (s.Length < 2) { err = "stream too short (empty program?)"; return false; }
-            int n = s.Length - 1, sum = 0;
-            for (int i = 0; i < n; i++) sum += s[i];
-            if ((sum & 0xFF) != s[n]) { err = "bad checksum"; return false; }
-            int p = 0;
-            while (p < n)
-            {
-                if (p + 3 > n) { err = "truncated line"; return false; }
-                int len = s[p + 2];
-                if (len < 2 || p + 3 + len > n) { err = "bad line length at byte " + p; return false; }
-                if (s[p + 2 + len] != 0x0D) { err = "missing CR at the end of the line at byte " + p; return false; }
-                p += 3 + len;
-            }
-            return true;
-        }
-
-        public static int CountLines(byte[] s)
-        {
-            int n = s.Length - 1, p = 0, c = 0;
-            while (p + 3 <= n) { p += 3 + s[p + 2]; c++; }
-            return c;
-        }
-
-        // name taken from the first line that starts with REM (token F1 AB)
-        public static string NameFromRem(byte[] s)
-        {
-            int n = s.Length - 1, p = 0;
-            while (p + 3 <= n)
-            {
-                int len = s[p + 2];
-                int c = p + 3;
-                if (len >= 3 && s[c] == 0xF1 && s[c + 1] == 0xAB)
-                {
-                    var sb = new StringBuilder();
-                    for (int i = c + 2; i < p + 2 + len; i++) sb.Append((char)s[i]);
-                    string t = Clean(sb.ToString());
-                    if (t.Length > 0) return t;
-                }
-                p += 3 + len;
-            }
-            return null;
-        }
-
-        // name taken from the first "[number] REM text" line of an ASCII listing
-        public static string NameFromText(byte[] s)
-        {
-            var line = new StringBuilder();
-            for (int i = 0; i <= s.Length; i++)
-            {
-                if (i == s.Length || s[i] == 0x0D || s[i] == 0x0A)
-                {
-                    string t = line.ToString().TrimStart(' ', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9');
-                    line.Length = 0;
-                    if (t.StartsWith("REM", StringComparison.OrdinalIgnoreCase))
-                    {
-                        string name = Clean(t.Substring(3).TrimStart(' ', '\''));
-                        if (name.Length > 0) return name;
-                    }
-                }
-                else line.Append((char)s[i]);
-            }
-            return null;
-        }
-
-        public static string Clean(string t)
-        {
-            var bad = Path.GetInvalidFileNameChars();
-            var sb = new StringBuilder();
-            foreach (char ch in t.Trim())
-                sb.Append(ch < 32 || ch > 126 || Array.IndexOf(bad, ch) >= 0 ? '_' : ch);
-            string r = sb.ToString().Trim(' ', '.', '_');
-            if (r.Length > 40) r = r.Substring(0, 40).TrimEnd(' ', '.');
-            return r;
-        }
-    }
-
-    // Small icons drawn in code (no image files needed)
-    public static class Icons
-    {
-        static Bitmap Make(Action<Graphics, Pen, Brush> draw)
-        {
-            var b = new Bitmap(20, 20);
-            using (var g = Graphics.FromImage(b))
-            using (var pen = new Pen(Color.FromArgb(40, 70, 120), 2f))
-            using (var br = new SolidBrush(Color.FromArgb(40, 70, 120)))
-            {
-                g.SmoothingMode = SmoothingMode.AntiAlias;
-                draw(g, pen, br);
-            }
-            return b;
-        }
-
-        public static Bitmap Refresh() { return Make((g, p, b) => { g.DrawArc(p, 4, 4, 12, 12, 30, 290); g.FillPolygon(b, new[] { new Point(18, 3), new Point(18, 11), new Point(10, 8) }); }); }
-        public static Bitmap Plug() { return Make((g, p, b) => { g.FillRectangle(b, 5, 9, 10, 7); g.DrawLine(p, 8, 3, 8, 9); g.DrawLine(p, 12, 3, 12, 9); }); }
-        public static Bitmap Cross() { return Make((g, p, b) => { g.DrawLine(p, 5, 5, 15, 15); g.DrawLine(p, 15, 5, 5, 15); }); }
-        public static Bitmap Folder() { return Make((g, p, b) => { g.FillRectangle(b, 2, 6, 16, 11); g.FillRectangle(b, 2, 4, 7, 3); }); }
-        public static Bitmap Plane() { return Make((g, p, b) => { g.FillPolygon(b, new[] { new Point(2, 10), new Point(18, 3), new Point(13, 17), new Point(10, 12) }); }); }
-        public static Bitmap File() { return Make((g, p, b) => { g.DrawRectangle(p, 5, 2, 10, 16); g.DrawLine(p, 8, 8, 12, 8); g.DrawLine(p, 8, 12, 12, 12); }); }
-        // shooting star (yellow star head, curved light-blue forked tail) on a navy sky, drawn at any size
-        public static Bitmap Comet(int size)
-        {
-            var bmp = new Bitmap(size, size);
-            using (var g = Graphics.FromImage(bmp))
-            {
-                g.SmoothingMode = SmoothingMode.AntiAlias;
-                g.Clear(Color.Transparent);
-                g.ScaleTransform(size / 32F, size / 32F);
-                using (var b = new SolidBrush(Color.FromArgb(18, 40, 80))) g.FillEllipse(b, 0, 0, 31, 31);
-                using (var b = new SolidBrush(Color.White)) { g.FillRectangle(b, 5, 22, 1, 1); g.FillRectangle(b, 24, 5, 1, 1); g.FillRectangle(b, 12, 26, 1, 1); }
-
-                using (var tail = new GraphicsPath())
-                {
-                    tail.AddBezier(3, 9, 10, 4, 19, 7, 22, 19);        // upper edge
-                    tail.AddLine(22, 19, 21, 23);
-                    tail.AddBezier(21, 23, 17, 12, 10, 12, 6, 18);     // lower edge
-                    tail.AddLine(6, 18, 8, 12.5F);                      // fork
-                    tail.CloseFigure();
-                    using (var b = new SolidBrush(Color.FromArgb(135, 205, 255))) g.FillPath(b, tail);
-                }
-
-                var star = new PointF[10];
-                for (int i = 0; i < 10; i++)
-                {
-                    double ang = -Math.PI / 2 + i * Math.PI / 5 + 0.2;
-                    double r = i % 2 == 0 ? 7.0 : 3.0;
-                    star[i] = new PointF((float)(23 + r * Math.Cos(ang)), (float)(22 + r * Math.Sin(ang)));
-                }
-                using (var b = new SolidBrush(Color.FromArgb(255, 226, 100))) g.FillPolygon(b, star);
-            }
-            return bmp;
-        }
-
-        // application icon (window title bar and taskbar)
-        public static Icon AppIcon()
-        {
-            using (var bmp = Comet(32)) return Icon.FromHandle(bmp.GetHicon());
-        }
-    }
-
-    // Small status indicator: green LED + "Open" / dark (off) LED + "Closed"
-    public class LedLabel : Control
-    {
-        bool open;
-        public bool IsOpen { get { return open; } set { open = value; Invalidate(); } }
-
-        public LedLabel() { DoubleBuffered = true; }
-
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            var g = e.Graphics;
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-            var r = new Rectangle(4, (Height - 16) / 2, 16, 16);
-            using (var b = new SolidBrush(open ? Color.FromArgb(60, 225, 90) : Color.FromArgb(15, 15, 15))) g.FillEllipse(b, r);
-            using (var p = new Pen(open ? Color.FromArgb(20, 120, 40) : Color.FromArgb(110, 110, 110), 1.5f)) g.DrawEllipse(p, r);
-            if (open) using (var b = new SolidBrush(Color.FromArgb(200, 255, 210))) g.FillEllipse(b, 8, r.Top + 3, 4, 4);   // highlight
-            using (var f = new Font("Segoe UI", 9F, FontStyle.Bold))
-            using (var b = new SolidBrush(open ? Color.FromArgb(20, 120, 40) : Color.FromArgb(60, 60, 60)))
-                g.DrawString(open ? "Open" : "Closed", f, b, 26, (Height - 16) / 2);
-        }
-    }
-
-    // Banner: PC <-> PC-1600
-    public class BannerPanel : Panel
-    {
-        public bool PortOpen, Sending, Receiving;
-        Bitmap cometImg;
-
-        public BannerPanel() { DoubleBuffered = true; ResizeRedraw = true; }
-
-        static GraphicsPath Round(float x, float y, float w, float h, float r)
-        {
-            var gp = new GraphicsPath();
-            gp.AddArc(x, y, 2 * r, 2 * r, 180, 90);
-            gp.AddArc(x + w - 2 * r, y, 2 * r, 2 * r, 270, 90);
-            gp.AddArc(x + w - 2 * r, y + h - 2 * r, 2 * r, 2 * r, 0, 90);
-            gp.AddArc(x, y + h - 2 * r, 2 * r, 2 * r, 90, 90);
-            gp.CloseFigure();
-            return gp;
-        }
-
-        static void FillRound(Graphics g, Color c, float x, float y, float w, float h, float r)
-        {
-            using (var gp = Round(x, y, w, h, r)) using (var b = new SolidBrush(c)) g.FillPath(b, gp);
-        }
-
-        static void Text(Graphics g, string s, Font f, Color c, float cx, float y)
-        {
-            using (var b = new SolidBrush(c))
-            {
-                SizeF sz = g.MeasureString(s, f);
-                g.DrawString(s, f, b, cx - sz.Width / 2, y);
-            }
-        }
-
-        static void Arrow(Graphics g, int x1, int x2, int y, bool right, bool active)
-        {
-            Color c = active ? Color.FromArgb(130, 225, 255) : Color.FromArgb(70, 120, 175);
-            Point[] pts = right
-                ? new[] { new Point(x1, y - 5), new Point(x2 - 22, y - 5), new Point(x2 - 22, y - 12), new Point(x2, y), new Point(x2 - 22, y + 12), new Point(x2 - 22, y + 5), new Point(x1, y + 5) }
-                : new[] { new Point(x2, y - 5), new Point(x1 + 22, y - 5), new Point(x1 + 22, y - 12), new Point(x1, y), new Point(x1 + 22, y + 12), new Point(x1 + 22, y + 5), new Point(x2, y + 5) };
-            using (var b = new SolidBrush(c)) g.FillPolygon(b, pts);
-        }
-
-        static void Led(Graphics g, Color c, int cx, int y)
-        {
-            using (var b = new SolidBrush(c)) g.FillEllipse(b, cx - 5, y, 10, 10);
-        }
-
-        // Sharp PC-1600 (as on the photo): light body, LCD on the left (2/3), dark brown panel with the logo on the right (1/3),
-        // dark QWERTY keys under the LCD, dark numeric keypad under the brown panel
-        static void DrawPc1600(Graphics g, int kx, int top)
-        {
-            var state = g.Save();
-            g.TranslateTransform(kx, top + 60);          // whole icon scaled to 70 %
-            g.ScaleTransform(0.7F, 0.7F);
-            g.TranslateTransform(-kx, -(top + 60));
-            FillRound(g, Color.FromArgb(150, 150, 146), kx - 86, top + 10, 172, 82, 6);      // shadow edge
-            FillRound(g, Color.FromArgb(226, 226, 220), kx - 85, top + 8, 170, 82, 6);       // body
-            using (var b = new SolidBrush(Color.FromArgb(178, 194, 122))) g.FillRectangle(b, kx - 81, top + 12, 108, 30);   // LCD, no bezel
-            using (var p = new Pen(Color.FromArgb(130, 145, 90))) g.DrawRectangle(p, kx - 81, top + 12, 108, 30);
-            using (var b = new SolidBrush(Color.FromArgb(70, 50, 42))) g.FillRectangle(b, kx + 31, top + 12, 51, 21);       // brown panel (30 % lower)
-            using (var f = new Font("Arial", 5.5F, FontStyle.Bold)) Text(g, "SHARP", f, Color.FromArgb(230, 225, 215), kx + 56, top + 16);
-
-            Color dark = Color.FromArgb(48, 48, 54), dot = Color.FromArgb(215, 215, 210);
-            using (var bd = new SolidBrush(dark))
-            using (var bl = new SolidBrush(dot))
-            using (var br = new SolidBrush(Color.FromArgb(190, 50, 45)))
-            using (var bg = new SolidBrush(Color.FromArgb(190, 190, 184)))
-            {
-                // QWERTY rows under the LCD (left 2/3)
-                int[] cnt = { 10, 9, 10 };
-                int[] off = { 0, 5, 0 };
-                for (int row = 0; row < 3; row++)
-                    for (int col = 0; col < cnt[row]; col++)
-                    {
-                        int x = kx - 80 + off[row] + col * 10;
-                        g.FillRectangle(bd, x, top + 47 + row * 9, 8, 6);
-                        g.FillRectangle(bl, x + 3, top + 49 + row * 9, 2, 2);
-                    }
-                // bottom row: red key, light keys, wide dark space bar
-                g.FillRectangle(br, kx - 80, top + 74, 8, 6);
-                for (int i = 0; i < 3; i++) g.FillRectangle(bg, kx - 70 + i * 10, top + 74, 8, 6);
-                g.FillRectangle(bd, kx - 38, top + 74, 30, 6);
-                for (int i = 0; i < 3; i++) g.FillRectangle(bg, kx - 6 + i * 10, top + 74, 8, 6);
-
-                // keypad under the brown panel (right 1/3): small top row + 4 rows x 5 keys
-                for (int col = 0; col < 5; col++)
-                    g.FillRectangle(col == 1 ? br : bd, kx + 32 + col * 10, top + 45, 8, 6);
-                for (int row = 0; row < 4; row++)
-                    for (int col = 0; col < 5; col++)
-                    {
-                        int x = kx + 32 + col * 10, y = top + 54 + row * 8;
-                        g.FillRectangle(row == 0 && col == 4 ? br : bd, x, y, 8, 6);
-                        g.FillRectangle(bl, x + 3, y + 2, 2, 2);
-                    }
-            }
-            g.Restore(state);
-        }
-
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            var g = e.Graphics;
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
-            if (Width < 100 || Height < 60) return;
-            var r = ClientRectangle;
-            using (var br = new LinearGradientBrush(r, Color.FromArgb(14, 38, 72), Color.FromArgb(30, 70, 120), LinearGradientMode.Horizontal))
-                g.FillRectangle(br, r);
-
-            int pcx = Width * 22 / 100, kx = Width * 78 / 100, top = 12;
-
-            // PC
-            FillRound(g, Color.FromArgb(214, 208, 190), pcx - 48, top, 96, 70, 8);
-            using (var b = new SolidBrush(Color.FromArgb(10, 25, 30))) g.FillRectangle(b, pcx - 40, top + 8, 80, 50);
-            using (var f = new Font("Consolas", 16F, FontStyle.Bold)) Text(g, "PC", f, Color.FromArgb(90, 230, 120), pcx, top + 20);
-            using (var b = new SolidBrush(Color.FromArgb(190, 184, 168))) g.FillRectangle(b, pcx - 14, top + 70, 28, 8);
-            FillRound(g, Color.FromArgb(200, 194, 178), pcx - 56, top + 80, 112, 16, 4);
-            using (var b = new SolidBrush(Color.FromArgb(120, 115, 105)))
-                for (int i = 0; i < 10; i++) { g.FillRectangle(b, pcx - 50 + i * 10, top + 84, 7, 3); g.FillRectangle(b, pcx - 48 + i * 10, top + 89, 7, 3); }
-
-            DrawPc1600(g, kx, top);
-
-            // captions
-            using (var f = new Font("Segoe UI", 9F)) { Text(g, "Windows PC", f, Color.White, pcx, top + 100); Text(g, "Sharp PC-1600", f, Color.White, kx, top + 100); }
-
-            // centre: title, arrows, LEDs
-            int mid = Width / 2, ax1 = pcx + 70, ax2 = kx - 92;
-            using (var f = new Font("Segoe UI", 14F, FontStyle.Bold))
-            {
-                Text(g, "SerComet", f, Color.White, mid, top - 4);
-                if (cometImg == null) cometImg = Icons.Comet(28);
-                g.DrawImage(cometImg, mid - g.MeasureString("SerComet", f).Width / 2 - 32, top - 6);
-            }
-            Arrow(g, ax1, ax2, top + 44, true, Sending);
-            Arrow(g, ax1, ax2, top + 74, false, Receiving);
-            Color ok = PortOpen ? Color.FromArgb(70, 220, 90) : Color.FromArgb(90, 90, 100);
-            Led(g, ok, mid - 18, top + 96);
-            Led(g, ok, mid, top + 96);
-            Led(g, Sending || Receiving ? Color.FromArgb(240, 60, 50) : Color.FromArgb(90, 90, 100), mid + 18, top + 96);
-        }
-    }
-
     public partial class Form1 : Form
     {
         SerialPort port;
@@ -369,12 +60,12 @@ namespace UartSlTest
             var lblPort = new Label { Text = "Port:", Left = 10, Top = 16, Width = 40 };
             comboPorts = new ComboBox { Left = 55, Top = 12, Width = 100, DropDownStyle = ComboBoxStyle.DropDownList };
             btnRefresh = Btn("Refresh", Icons.Refresh(), 165, 9, 85, 28, TL);
-            btnOpen = Btn("Open port", Icons.Plug(), 256, 9, 115, 28, TL);
-            led = new LedLabel { Left = 376, Top = 11, Width = 85, Height = 26 };
-            var gbTarget = new GroupBox { Text = "Target computer", Left = 465, Top = 0, Width = 245, Height = 42, Anchor = TR };
-            radio1500 = new RadioButton { Text = "PC-1500", Left = 8, Top = 16, Width = 64, Enabled = false };   // not available yet
-            radio1600 = new RadioButton { Text = "PC-1600", Left = 72, Top = 16, Width = 64, Checked = true };
-            radioOther = new RadioButton { Text = "Other 15-pin", Left = 138, Top = 16, Width = 104 };
+            btnOpen = Btn("Open port", Icons.Plug(), 258, 9, 85, 28, TL);
+            led = new LedLabel { Left = 348, Top = 11, Width = 85, Height = 26 };
+            var gbTarget = new GroupBox { Text = "Target computer", Left = 438, Top = 0, Width = 272, Height = 42, Anchor = TR };
+            radio1500 = new RadioButton { Text = "PC-1500", Left = 8, Top = 16, Width = 70, Enabled = false };   // not available yet
+            radio1600 = new RadioButton { Text = "PC-1600", Left = 80, Top = 16, Width = 70, Checked = true };
+            radioOther = new RadioButton { Text = "Other 15-pin SIO", Left = 152, Top = 16, Width = 116 };
             gbTarget.Controls.AddRange(new Control[] { radio1500, radio1600, radioOther });
 
             banner = new BannerPanel { Left = 10, Top = 46, Width = 700, Height = 132, Anchor = TLR };
@@ -389,6 +80,11 @@ namespace UartSlTest
             comboBaud.SelectedItem = "9600";
             var lblDelay = new Label { Text = "Line delay (ms):", Left = 570, Top = 27, Width = 82 };
             numDelay = new NumericUpDown { Left = 652, Top = 23, Width = 45, Minimum = 0, Maximum = 5000, Value = 100, Increment = 50 };
+            foreach (RadioButton rb in new[] { radioSoft, radioRs, radioSio })
+            {
+                rb.Top = 22; rb.Height = 22;
+                rb.TextAlign = ContentAlignment.MiddleLeft; rb.CheckAlign = ContentAlignment.MiddleLeft;
+            }
             gb.Controls.AddRange(new Control[] { radioSoft, radioRs, radioSio, lblBaud, comboBaud, lblDelay, numDelay });
 
             var lblDir = new Label { Text = "Folder:", Left = 10, Top = 256, Width = 50 };
@@ -479,6 +175,8 @@ namespace UartSlTest
             radioSio.Enabled = other;
             if (other) radioSio.Checked = true;
             else if (radioSio.Checked) radioSoft.Checked = true;
+            banner.ModelName = other ? "Other Sharp" : radio1500.Checked ? "Sharp PC-1500" : "Sharp PC-1600";
+            banner.Invalidate();
             SetDefaultDir(other ? "PC_15-pin" : radio1500.Checked ? "PC1500" : "PC1600");
             UpdateMode();
         }
@@ -724,6 +422,316 @@ namespace UartSlTest
                 sending = false;
                 btnSend.Enabled = btnSendOther.Enabled = true;
             }
+        }
+    }
+
+    // .sl16 file = exactly the stream sent by SAVE: BASIC program bytes + 1 checksum byte (sum mod 256).
+    // Line: [line number 2 B][length 1 B][content, ends with 0D]. The end marker (FF) is not stored.
+    public static class Sl16
+    {
+        public static bool Check(byte[] s, out string err)
+        {
+            err = null;
+            if (s.Length < 2) { err = "stream too short (empty program?)"; return false; }
+            int n = s.Length - 1, sum = 0;
+            for (int i = 0; i < n; i++) sum += s[i];
+            if ((sum & 0xFF) != s[n]) { err = "bad checksum"; return false; }
+            int p = 0;
+            while (p < n)
+            {
+                if (p + 3 > n) { err = "truncated line"; return false; }
+                int len = s[p + 2];
+                if (len < 2 || p + 3 + len > n) { err = "bad line length at byte " + p; return false; }
+                if (s[p + 2 + len] != 0x0D) { err = "missing CR at the end of the line at byte " + p; return false; }
+                p += 3 + len;
+            }
+            return true;
+        }
+
+        public static int CountLines(byte[] s)
+        {
+            int n = s.Length - 1, p = 0, c = 0;
+            while (p + 3 <= n) { p += 3 + s[p + 2]; c++; }
+            return c;
+        }
+
+        // name taken from the first line that starts with REM (token F1 AB)
+        public static string NameFromRem(byte[] s)
+        {
+            int n = s.Length - 1, p = 0;
+            while (p + 3 <= n)
+            {
+                int len = s[p + 2];
+                int c = p + 3;
+                if (len >= 3 && s[c] == 0xF1 && s[c + 1] == 0xAB)
+                {
+                    var sb = new StringBuilder();
+                    for (int i = c + 2; i < p + 2 + len; i++) sb.Append((char)s[i]);
+                    string t = Clean(sb.ToString());
+                    if (t.Length > 0) return t;
+                }
+                p += 3 + len;
+            }
+            return null;
+        }
+
+        // name taken from the first "[number] REM text" line of an ASCII listing
+        public static string NameFromText(byte[] s)
+        {
+            var line = new StringBuilder();
+            for (int i = 0; i <= s.Length; i++)
+            {
+                if (i == s.Length || s[i] == 0x0D || s[i] == 0x0A)
+                {
+                    string t = line.ToString().TrimStart(' ', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9');
+                    line.Length = 0;
+                    if (t.StartsWith("REM", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string name = Clean(t.Substring(3).TrimStart(' ', '\''));
+                        if (name.Length > 0) return name;
+                    }
+                }
+                else line.Append((char)s[i]);
+            }
+            return null;
+        }
+
+        public static string Clean(string t)
+        {
+            var bad = Path.GetInvalidFileNameChars();
+            var sb = new StringBuilder();
+            foreach (char ch in t.Trim())
+                sb.Append(ch < 32 || ch > 126 || Array.IndexOf(bad, ch) >= 0 ? '_' : ch);
+            string r = sb.ToString().Trim(' ', '.', '_');
+            if (r.Length > 40) r = r.Substring(0, 40).TrimEnd(' ', '.');
+            return r;
+        }
+    }
+
+    // Small icons drawn in code (no image files needed)
+    public static class Icons
+    {
+        static Bitmap Make(Action<Graphics, Pen, Brush> draw)
+        {
+            var b = new Bitmap(20, 20);
+            using (var g = Graphics.FromImage(b))
+            using (var pen = new Pen(Color.FromArgb(40, 70, 120), 2f))
+            using (var br = new SolidBrush(Color.FromArgb(40, 70, 120)))
+            {
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                draw(g, pen, br);
+            }
+            return b;
+        }
+
+        public static Bitmap Refresh() { return Make((g, p, b) => { g.DrawArc(p, 4, 4, 12, 12, 30, 290); g.FillPolygon(b, new[] { new Point(18, 3), new Point(18, 11), new Point(10, 8) }); }); }
+        public static Bitmap Plug() { return Make((g, p, b) => { g.FillRectangle(b, 5, 9, 10, 7); g.DrawLine(p, 8, 3, 8, 9); g.DrawLine(p, 12, 3, 12, 9); }); }
+        public static Bitmap Cross() { return Make((g, p, b) => { g.DrawLine(p, 5, 5, 15, 15); g.DrawLine(p, 15, 5, 5, 15); }); }
+        public static Bitmap Folder() { return Make((g, p, b) => { g.FillRectangle(b, 2, 6, 16, 11); g.FillRectangle(b, 2, 4, 7, 3); }); }
+        public static Bitmap Plane() { return Make((g, p, b) => { g.FillPolygon(b, new[] { new Point(2, 10), new Point(18, 3), new Point(13, 17), new Point(10, 12) }); }); }
+        public static Bitmap File() { return Make((g, p, b) => { g.DrawRectangle(p, 5, 2, 10, 16); g.DrawLine(p, 8, 8, 12, 8); g.DrawLine(p, 8, 12, 12, 12); }); }
+        // shooting star (yellow star head, curved light-blue forked tail) on a navy sky, drawn at any size
+        public static Bitmap Comet(int size)
+        {
+            var bmp = new Bitmap(size, size);
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.Clear(Color.Transparent);
+                g.ScaleTransform(size / 32F, size / 32F);
+                using (var b = new SolidBrush(Color.FromArgb(18, 40, 80))) g.FillEllipse(b, 0, 0, 31, 31);
+                using (var b = new SolidBrush(Color.White)) { g.FillRectangle(b, 5, 22, 1, 1); g.FillRectangle(b, 24, 5, 1, 1); g.FillRectangle(b, 12, 26, 1, 1); }
+
+                using (var tail = new GraphicsPath())
+                {
+                    tail.AddBezier(3, 9, 10, 4, 19, 7, 22, 19);        // upper edge
+                    tail.AddLine(22, 19, 21, 23);
+                    tail.AddBezier(21, 23, 17, 12, 10, 12, 6, 18);     // lower edge
+                    tail.AddLine(6, 18, 8, 12.5F);                      // fork
+                    tail.CloseFigure();
+                    using (var b = new SolidBrush(Color.FromArgb(135, 205, 255))) g.FillPath(b, tail);
+                }
+
+                var star = new PointF[10];
+                for (int i = 0; i < 10; i++)
+                {
+                    double ang = -Math.PI / 2 + i * Math.PI / 5 + 0.2;
+                    double r = i % 2 == 0 ? 7.0 : 3.0;
+                    star[i] = new PointF((float)(23 + r * Math.Cos(ang)), (float)(22 + r * Math.Sin(ang)));
+                }
+                using (var b = new SolidBrush(Color.FromArgb(255, 226, 100))) g.FillPolygon(b, star);
+            }
+            return bmp;
+        }
+
+        // application icon (window title bar and taskbar)
+        public static Icon AppIcon()
+        {
+            using (var bmp = Comet(32)) return Icon.FromHandle(bmp.GetHicon());
+        }
+    }
+
+    // Small status indicator: green LED + "Open" / dark (off) LED + "Closed"
+    public class LedLabel : Control
+    {
+        bool open;
+        public bool IsOpen { get { return open; } set { open = value; Invalidate(); } }
+
+        public LedLabel() { DoubleBuffered = true; }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            var r = new Rectangle(4, (Height - 16) / 2, 16, 16);
+            using (var b = new SolidBrush(open ? Color.FromArgb(60, 225, 90) : Color.FromArgb(15, 15, 15))) g.FillEllipse(b, r);
+            using (var p = new Pen(open ? Color.FromArgb(20, 120, 40) : Color.FromArgb(110, 110, 110), 1.5f)) g.DrawEllipse(p, r);
+            if (open) using (var b = new SolidBrush(Color.FromArgb(200, 255, 210))) g.FillEllipse(b, 8, r.Top + 3, 4, 4);   // highlight
+            using (var f = new Font("Segoe UI", 9F, FontStyle.Bold))
+            using (var b = new SolidBrush(open ? Color.FromArgb(20, 120, 40) : Color.FromArgb(60, 60, 60)))
+                g.DrawString(open ? "Open" : "Closed", f, b, 26, (Height - 16) / 2);
+        }
+    }
+
+    // Banner: PC <-> PC-1600
+    public class BannerPanel : Panel
+    {
+        public bool PortOpen, Sending, Receiving;
+        Bitmap cometImg;
+        public string ModelName = "Sharp PC-1600";
+
+        public BannerPanel() { DoubleBuffered = true; ResizeRedraw = true; }
+
+        static GraphicsPath Round(float x, float y, float w, float h, float r)
+        {
+            var gp = new GraphicsPath();
+            gp.AddArc(x, y, 2 * r, 2 * r, 180, 90);
+            gp.AddArc(x + w - 2 * r, y, 2 * r, 2 * r, 270, 90);
+            gp.AddArc(x + w - 2 * r, y + h - 2 * r, 2 * r, 2 * r, 0, 90);
+            gp.AddArc(x, y + h - 2 * r, 2 * r, 2 * r, 90, 90);
+            gp.CloseFigure();
+            return gp;
+        }
+
+        static void FillRound(Graphics g, Color c, float x, float y, float w, float h, float r)
+        {
+            using (var gp = Round(x, y, w, h, r)) using (var b = new SolidBrush(c)) g.FillPath(b, gp);
+        }
+
+        static void Text(Graphics g, string s, Font f, Color c, float cx, float y)
+        {
+            using (var b = new SolidBrush(c))
+            {
+                SizeF sz = g.MeasureString(s, f);
+                g.DrawString(s, f, b, cx - sz.Width / 2, y);
+            }
+        }
+
+        static void Arrow(Graphics g, int x1, int x2, int y, bool right, bool active)
+        {
+            Color c = active ? Color.FromArgb(130, 225, 255) : Color.FromArgb(70, 120, 175);
+            Point[] pts = right
+                ? new[] { new Point(x1, y - 5), new Point(x2 - 22, y - 5), new Point(x2 - 22, y - 12), new Point(x2, y), new Point(x2 - 22, y + 12), new Point(x2 - 22, y + 5), new Point(x1, y + 5) }
+                : new[] { new Point(x2, y - 5), new Point(x1 + 22, y - 5), new Point(x1 + 22, y - 12), new Point(x1, y), new Point(x1 + 22, y + 12), new Point(x1 + 22, y + 5), new Point(x2, y + 5) };
+            using (var b = new SolidBrush(c)) g.FillPolygon(b, pts);
+        }
+
+        static void Led(Graphics g, Color c, int cx, int y)
+        {
+            using (var b = new SolidBrush(c)) g.FillEllipse(b, cx - 5, y, 10, 10);
+        }
+
+        // Sharp PC-1600 (as on the photo): light body, LCD on the left (2/3), dark brown panel with the logo on the right (1/3),
+        // dark QWERTY keys under the LCD, dark numeric keypad under the brown panel
+        static void DrawPc1600(Graphics g, int kx, int top)
+        {
+            var state = g.Save();
+            g.TranslateTransform(kx, top + 60);          // whole icon scaled to 70 %
+            g.ScaleTransform(0.7F, 0.7F);
+            g.TranslateTransform(-kx, -(top + 60));
+            FillRound(g, Color.FromArgb(150, 150, 146), kx - 86, top + 10, 172, 82, 6);      // shadow edge
+            FillRound(g, Color.FromArgb(226, 226, 220), kx - 85, top + 8, 170, 82, 6);       // body
+            using (var b = new SolidBrush(Color.FromArgb(178, 194, 122))) g.FillRectangle(b, kx - 81, top + 12, 108, 30);   // LCD, no bezel
+            using (var p = new Pen(Color.FromArgb(130, 145, 90))) g.DrawRectangle(p, kx - 81, top + 12, 108, 30);
+            using (var b = new SolidBrush(Color.FromArgb(70, 50, 42))) g.FillRectangle(b, kx + 31, top + 12, 51, 21);       // brown panel (30 % lower)
+            using (var f = new Font("Arial", 5.5F, FontStyle.Bold)) Text(g, "SHARP", f, Color.FromArgb(230, 225, 215), kx + 56, top + 16);
+
+            Color dark = Color.FromArgb(48, 48, 54), dot = Color.FromArgb(215, 215, 210);
+            using (var bd = new SolidBrush(dark))
+            using (var bl = new SolidBrush(dot))
+            using (var br = new SolidBrush(Color.FromArgb(190, 50, 45)))
+            using (var bg = new SolidBrush(Color.FromArgb(190, 190, 184)))
+            {
+                // QWERTY rows under the LCD (left 2/3)
+                int[] cnt = { 10, 9, 10 };
+                int[] off = { 0, 5, 0 };
+                for (int row = 0; row < 3; row++)
+                    for (int col = 0; col < cnt[row]; col++)
+                    {
+                        int x = kx - 80 + off[row] + col * 10;
+                        g.FillRectangle(bd, x, top + 47 + row * 9, 8, 6);
+                        g.FillRectangle(bl, x + 3, top + 49 + row * 9, 2, 2);
+                    }
+                // bottom row: red key, light keys, wide dark space bar
+                g.FillRectangle(br, kx - 80, top + 74, 8, 6);
+                for (int i = 0; i < 3; i++) g.FillRectangle(bg, kx - 70 + i * 10, top + 74, 8, 6);
+                g.FillRectangle(bd, kx - 38, top + 74, 30, 6);
+                for (int i = 0; i < 3; i++) g.FillRectangle(bg, kx - 6 + i * 10, top + 74, 8, 6);
+
+                // keypad under the brown panel (right 1/3): small top row + 4 rows x 5 keys
+                for (int col = 0; col < 5; col++)
+                    g.FillRectangle(col == 1 ? br : bd, kx + 32 + col * 10, top + 45, 8, 6);
+                for (int row = 0; row < 4; row++)
+                    for (int col = 0; col < 5; col++)
+                    {
+                        int x = kx + 32 + col * 10, y = top + 54 + row * 8;
+                        g.FillRectangle(row == 0 && col == 4 ? br : bd, x, y, 8, 6);
+                        g.FillRectangle(bl, x + 3, y + 2, 2, 2);
+                    }
+            }
+            g.Restore(state);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+            if (Width < 100 || Height < 60) return;
+            var r = ClientRectangle;
+            using (var br = new LinearGradientBrush(r, Color.FromArgb(14, 38, 72), Color.FromArgb(30, 70, 120), LinearGradientMode.Horizontal))
+                g.FillRectangle(br, r);
+
+            int pcx = Width * 22 / 100, kx = Width * 78 / 100, top = 12;
+
+            // PC
+            FillRound(g, Color.FromArgb(214, 208, 190), pcx - 48, top, 96, 70, 8);
+            using (var b = new SolidBrush(Color.FromArgb(10, 25, 30))) g.FillRectangle(b, pcx - 40, top + 8, 80, 50);
+            using (var f = new Font("Consolas", 16F, FontStyle.Bold)) Text(g, "PC", f, Color.FromArgb(90, 230, 120), pcx, top + 20);
+            using (var b = new SolidBrush(Color.FromArgb(190, 184, 168))) g.FillRectangle(b, pcx - 14, top + 70, 28, 8);
+            FillRound(g, Color.FromArgb(200, 194, 178), pcx - 56, top + 80, 112, 16, 4);
+            using (var b = new SolidBrush(Color.FromArgb(120, 115, 105)))
+                for (int i = 0; i < 10; i++) { g.FillRectangle(b, pcx - 50 + i * 10, top + 84, 7, 3); g.FillRectangle(b, pcx - 48 + i * 10, top + 89, 7, 3); }
+
+            DrawPc1600(g, kx, top);
+
+            // captions
+            using (var f = new Font("Segoe UI", 9F)) { Text(g, "Windows PC", f, Color.White, pcx, top + 100); Text(g, ModelName, f, Color.White, kx, top + 100); }
+
+            // centre: title, arrows, LEDs
+            int mid = Width / 2, ax1 = pcx + 70, ax2 = kx - 92;
+            using (var f = new Font("Segoe UI", 14F, FontStyle.Bold))
+            {
+                Text(g, "SerComet", f, Color.White, mid, top - 4);
+                if (cometImg == null) cometImg = Icons.Comet(28);
+                g.DrawImage(cometImg, mid - g.MeasureString("SerComet", f).Width / 2 - 32, top - 6);
+            }
+            Arrow(g, ax1, ax2, top + 44, true, Sending);
+            Arrow(g, ax1, ax2, top + 74, false, Receiving);
+            Color ok = PortOpen ? Color.FromArgb(70, 220, 90) : Color.FromArgb(90, 90, 100);
+            Led(g, ok, mid - 18, top + 96);
+            Led(g, ok, mid, top + 96);
+            Led(g, Sending || Receiving ? Color.FromArgb(240, 60, 50) : Color.FromArgb(90, 90, 100), mid + 18, top + 96);
         }
     }
 }
