@@ -335,8 +335,8 @@ namespace UartSlTest
         ListBox lstFiles;
         Label lblHint;
         LedLabel led;
-        RadioButton radio1500, radio1600;
-        RadioButton radioSoft, radioRs;
+        RadioButton radio1500, radio1600, radioOther;
+        RadioButton radioSoft, radioRs, radioSio;
         NumericUpDown numDelay;
         Timer timer;
 
@@ -368,42 +368,44 @@ namespace UartSlTest
 
             var lblPort = new Label { Text = "Port:", Left = 10, Top = 16, Width = 40 };
             comboPorts = new ComboBox { Left = 55, Top = 12, Width = 100, DropDownStyle = ComboBoxStyle.DropDownList };
-            btnRefresh = Btn("Refresh", Icons.Refresh(), 165, 9, 100, 28, TL);
-            btnOpen = Btn("Open port", Icons.Plug(), 275, 9, 130, 28, TL);
-            led = new LedLabel { Left = 415, Top = 11, Width = 90, Height = 26 };
-            var gbTarget = new GroupBox { Text = "Target computer", Left = 520, Top = 0, Width = 190, Height = 42, Anchor = TR };
-            radio1500 = new RadioButton { Text = "PC-1500", Left = 10, Top = 16, Width = 75, Enabled = false };   // not available yet
-            radio1600 = new RadioButton { Text = "PC-1600", Left = 100, Top = 16, Width = 80, Checked = true };
-            gbTarget.Controls.AddRange(new Control[] { radio1500, radio1600 });
+            btnRefresh = Btn("Refresh", Icons.Refresh(), 165, 9, 85, 28, TL);
+            btnOpen = Btn("Open port", Icons.Plug(), 256, 9, 115, 28, TL);
+            led = new LedLabel { Left = 376, Top = 11, Width = 85, Height = 26 };
+            var gbTarget = new GroupBox { Text = "Target computer", Left = 465, Top = 0, Width = 245, Height = 42, Anchor = TR };
+            radio1500 = new RadioButton { Text = "PC-1500", Left = 8, Top = 16, Width = 64, Enabled = false };   // not available yet
+            radio1600 = new RadioButton { Text = "PC-1600", Left = 72, Top = 16, Width = 64, Checked = true };
+            radioOther = new RadioButton { Text = "Other 15-pin", Left = 138, Top = 16, Width = 104 };
+            gbTarget.Controls.AddRange(new Control[] { radio1500, radio1600, radioOther });
 
             banner = new BannerPanel { Left = 10, Top = 46, Width = 700, Height = 132, Anchor = TLR };
 
-            var gb = new GroupBox { Text = "PC-1600 transmission", Left = 10, Top = 184, Width = 700, Height = 58, Anchor = TLR };
-            radioSoft = new RadioButton { Text = "Software serial (19200 8N1, binary)", Left = 12, Top = 24, Width = 235, Checked = true };
-            radioRs = new RadioButton { Text = "RS-232 (serial port, text)", Left = 250, Top = 24, Width = 155 };
-            var lblBaud = new Label { Text = "Baud:", Left = 410, Top = 27, Width = 35 };
-            comboBaud = new ComboBox { Left = 447, Top = 23, Width = 65, DropDownStyle = ComboBoxStyle.DropDownList };
+            var gb = new GroupBox { Text = "Transmission mode", Left = 10, Top = 184, Width = 700, Height = 58, Anchor = TLR };
+            radioSoft = new RadioButton { Text = "Software serial (19200 8N1, binary)", Left = 10, Top = 24, Width = 200, Checked = true };
+            radioRs = new RadioButton { Text = "RS-232 (serial port, text)", Left = 212, Top = 24, Width = 150 };
+            radioSio = new RadioButton { Text = "TTL-UART SIO", Left = 364, Top = 24, Width = 98, Enabled = false };
+            var lblBaud = new Label { Text = "Baud:", Left = 466, Top = 27, Width = 35 };
+            comboBaud = new ComboBox { Left = 502, Top = 23, Width = 62, DropDownStyle = ComboBoxStyle.DropDownList };
             foreach (int b in new[] { 300, 600, 1200, 2400, 4800, 9600, 19200 }) comboBaud.Items.Add(b.ToString());
             comboBaud.SelectedItem = "9600";
-            var lblDelay = new Label { Text = "Line delay (ms):", Left = 522, Top = 27, Width = 90 };
-            numDelay = new NumericUpDown { Left = 614, Top = 23, Width = 70, Minimum = 0, Maximum = 5000, Value = 100, Increment = 50 };
-            gb.Controls.AddRange(new Control[] { radioSoft, radioRs, lblBaud, comboBaud, lblDelay, numDelay });
+            var lblDelay = new Label { Text = "Line delay (ms):", Left = 570, Top = 27, Width = 82 };
+            numDelay = new NumericUpDown { Left = 652, Top = 23, Width = 45, Minimum = 0, Maximum = 5000, Value = 100, Increment = 50 };
+            gb.Controls.AddRange(new Control[] { radioSoft, radioRs, radioSio, lblBaud, comboBaud, lblDelay, numDelay });
 
             var lblDir = new Label { Text = "Folder:", Left = 10, Top = 256, Width = 50 };
             txtDir = new TextBox
             {
-                Left = 65, Top = 252, Width = 440, Anchor = TLR,
+                Left = 65, Top = 252, Width = 460, Anchor = TLR,
                 Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "PC1600")
             };
-            btnBrowse = Btn("Browse...", Icons.Folder(), 515, 249, 105, 28, TR);
-            btnOpenDir = Btn("Open", Icons.Folder(), 625, 249, 85, 28, TR);
+            btnBrowse = Btn("Browse...", Icons.Folder(), 535, 249, 85, 28, TR);
+            btnOpenDir = Btn("Open", Icons.Folder(), 628, 249, 82, 28, TR);
 
             lblHint = new Label { Left = 10, Top = 284, Width = 700, Height = 48, Anchor = TLR, BorderStyle = BorderStyle.FixedSingle, Padding = new Padding(4) };
 
-            lstFiles = new ListBox { Left = 10, Top = 340, Width = 540, Height = 110, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
-            btnSend = Btn("Send selected", Icons.Plane(), 560, 340, 150, 34, TR);
-            btnSendOther = Btn("Send file...", Icons.File(), 560, 380, 150, 34, TR);
-            btnRefreshFiles = Btn("Refresh list", Icons.Refresh(), 560, 420, 150, 30, TR);
+            lstFiles = new ListBox { Left = 10, Top = 340, Width = 565, Height = 110, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
+            btnSend = Btn("Send selected", Icons.Plane(), 585, 340, 125, 34, TR);
+            btnSendOther = Btn("Send file...", Icons.File(), 585, 380, 125, 34, TR);
+            btnRefreshFiles = Btn("Refresh list", Icons.Refresh(), 585, 420, 125, 30, TR);
 
             txtLog = new TextBox
             {
@@ -431,8 +433,10 @@ namespace UartSlTest
             btnOpen.Click += delegate { TogglePort(); };
             radioSoft.CheckedChanged += delegate { UpdateMode(); };
             radioRs.CheckedChanged += delegate { UpdateMode(); };
-            radio1500.CheckedChanged += delegate { if (radio1500.Checked) SetDefaultDir("PC1500"); };
-            radio1600.CheckedChanged += delegate { if (radio1600.Checked) SetDefaultDir("PC1600"); };
+            radioSio.CheckedChanged += delegate { UpdateMode(); };
+            radio1500.CheckedChanged += delegate { if (radio1500.Checked) SetTarget(); };
+            radio1600.CheckedChanged += delegate { if (radio1600.Checked) SetTarget(); };
+            radioOther.CheckedChanged += delegate { if (radioOther.Checked) SetTarget(); };
             comboBaud.SelectedIndexChanged += delegate { ApplyBaud(); };
             btnBrowse.Click += delegate
             {
@@ -467,6 +471,18 @@ namespace UartSlTest
             timer.Start();
         }
 
+        // target computer: default folder and the available transmission modes
+        void SetTarget()
+        {
+            bool other = radioOther.Checked;
+            radioSoft.Enabled = radioRs.Enabled = !other;
+            radioSio.Enabled = other;
+            if (other) radioSio.Checked = true;
+            else if (radioSio.Checked) radioSoft.Checked = true;
+            SetDefaultDir(other ? "PC_15-pin" : radio1500.Checked ? "PC1500" : "PC1600");
+            UpdateMode();
+        }
+
         void SetDefaultDir(string sub)
         {
             txtDir.Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), sub);
@@ -479,9 +495,11 @@ namespace UartSlTest
 
         void UpdateMode()
         {
-            rs232 = radioRs.Checked;
+            rs232 = radioRs.Checked || radioSio.Checked;
             comboBaud.Enabled = numDelay.Enabled = rs232;
-            lblHint.Text = rs232
+            lblHint.Text = radioSio.Checked
+                ? "Other Sharp models through the 15-pin connector (TTL-UART SIO + USB/COM adapter), like TeraTerm. RECEIVE: send the program as text from the pocket computer (same baud rate on both sides); the file is saved after 3 s of silence.\r\nSEND: start receiving on the pocket computer first, then press Send. Lines are sent one by one with the delay set above."
+                : rs232
                 ? "RECEIVE: send the program as text from the PC-1600 through its RS-232 port (same baud rate on both sides). The file is saved after 3 s of silence, named after the first REM line.\r\nSEND: start receiving on the PC-1600 first, then press Send. Lines are sent one by one with the delay set above."
                 : "RECEIVE: on the PC-1600 run SAVE (CALL addr,X). The file is saved automatically, named after the first REM.\r\nSEND: run LOAD on the PC-1600 first (CALL addr+176,X), then press Send (30 s to start).";
             ApplyBaud();
