@@ -89,7 +89,7 @@ namespace UartSlTest
             foreach (int b in new[] { 300, 600, 1200, 2400, 4800, 9600, 19200 }) comboBaud.Items.Add(b.ToString());
             comboBaud.SelectedItem = "9600";
             var lblDelay = new Label { Text = "Delay:" };
-            numDelay = new NumericUpDown { Width = 38, Minimum = 0, Maximum = 5000, Value = 100, Increment = 50 };
+            numDelay = new NumericUpDown { Width = 46, Minimum = 0, Maximum = 5000, Value = 100, Increment = 50 };
             var lblEol = new Label { Text = "EOL:" };
             comboEol = new ComboBox { Width = 50, DropDownStyle = ComboBoxStyle.DropDownList };
             comboEol.Items.AddRange(new object[] { "CR", "CR+LF", "LF" });
