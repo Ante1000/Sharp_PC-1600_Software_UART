@@ -187,10 +187,10 @@ namespace UartSlTest
             bool p1500 = radio1500.Checked;
             radioSoft.Enabled = radioRs.Enabled = !other;
             radioSio.Enabled = other;
-            radioRs.Text = p1500 ? "RS-232 - serial interface" : "RS-232 (serial port, see text)";
+            radioRs.Text = p1500 ? "RS-232 - serial interface" : "RS-232 - serial interface";
             if (other) radioSio.Checked = true;
             else if (radioSio.Checked) radioSoft.Checked = true;
-            banner.ModelName = other ? "Other Sharp" : p1500 ? "Sharp PC-1500" : "Sharp PC-1600";
+            banner.ModelName = other ? "Other Sharp with 15-pin connector" : p1500 ? "Sharp PC-1500" : "Sharp PC-1600";
             banner.Invalidate();
             SetDefaultDir(other ? "PC_15-pin" : p1500 ? "PC1500" : "PC1600");
             UpdateMode();
