@@ -178,6 +178,31 @@ namespace UartSlTest
             using (var b = new SolidBrush(c)) g.FillEllipse(b, cx - 5, y, 10, 10);
         }
 
+        // Sharp PC-1600: light grey body, dark bezel with a wide LCD, function keys and QWERTY keyboard
+        static void DrawPc1600(Graphics g, int kx, int top)
+        {
+            FillRound(g, Color.FromArgb(120, 120, 118), kx - 86, top + 10, 172, 82, 7);      // shadow edge
+            FillRound(g, Color.FromArgb(208, 208, 203), kx - 85, top + 8, 170, 82, 7);       // body
+            FillRound(g, Color.FromArgb(48, 50, 56), kx - 81, top + 11, 162, 35, 4);         // bezel
+            using (var b = new SolidBrush(Color.FromArgb(170, 186, 152))) g.FillRectangle(b, kx - 62, top + 14, 120, 29);   // LCD
+            using (var b = new SolidBrush(Color.FromArgb(55, 70, 55)))
+                for (int r = 0; r < 4; r++)
+                {
+                    int w = new[] { 84, 104, 62, 96 }[r];
+                    for (int c = 0; c < w; c += 3) g.FillRectangle(b, kx - 59 + c, top + 17 + r * 6, 2, 4);   // dotted text rows
+                }
+            using (var f = new Font("Arial", 5.5F, FontStyle.Bold)) Text(g, "SHARP", f, Color.White, kx + 71, top + 14);
+            using (var b = new SolidBrush(Color.FromArgb(120, 125, 135)))
+                for (int i = 0; i < 3; i++) g.FillRectangle(b, kx - 77, top + 17 + i * 8, 10, 5);      // side keys left of the LCD
+            using (var b = new SolidBrush(Color.FromArgb(95, 98, 108)))
+                for (int i = 0; i < 9; i++) g.FillRectangle(b, kx - 77 + i * 17, top + 50, 14, 5);    // function key row
+            using (var b = new SolidBrush(Color.FromArgb(240, 240, 235)))
+                for (int row = 0; row < 3; row++)
+                    for (int col = 0; col < 13; col++)
+                        g.FillRectangle(b, kx - 77 + col * 12 + row * 3, top + 58 + row * 8, 10, 6);   // QWERTY rows
+            using (var b = new SolidBrush(Color.FromArgb(240, 240, 235))) g.FillRectangle(b, kx - 30, top + 82, 60, 5);   // space bar
+        }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics;
@@ -199,20 +224,13 @@ namespace UartSlTest
             using (var b = new SolidBrush(Color.FromArgb(120, 115, 105)))
                 for (int i = 0; i < 10; i++) { g.FillRectangle(b, pcx - 50 + i * 10, top + 84, 7, 3); g.FillRectangle(b, pcx - 48 + i * 10, top + 89, 7, 3); }
 
-            // PC-1600
-            FillRound(g, Color.FromArgb(60, 62, 70), kx - 62, top + 6, 124, 84, 8);
-            using (var b = new SolidBrush(Color.FromArgb(176, 194, 164))) g.FillRectangle(b, kx - 54, top + 12, 108, 18);
-            using (var f = new Font("Consolas", 9F, FontStyle.Bold)) Text(g, "PC-1600", f, Color.FromArgb(40, 60, 40), kx, top + 14);
-            for (int row = 0; row < 4; row++)
-                for (int col = 0; col < 9; col++)
-                    using (var b = new SolidBrush(row == 0 && col > 6 ? Color.FromArgb(230, 140, 40) : Color.FromArgb(205, 205, 200)))
-                        g.FillRectangle(b, kx - 54 + col * 12, top + 36 + row * 12, 9, 8);
+            DrawPc1600(g, kx, top);
 
             // captions
             using (var f = new Font("Segoe UI", 9F)) { Text(g, "Windows PC", f, Color.White, pcx, top + 100); Text(g, "Sharp PC-1600", f, Color.White, kx, top + 100); }
 
             // centre: title, arrows, LEDs
-            int mid = Width / 2, ax1 = pcx + 70, ax2 = kx - 76;
+            int mid = Width / 2, ax1 = pcx + 70, ax2 = kx - 92;
             using (var f = new Font("Segoe UI", 14F, FontStyle.Bold)) Text(g, "SerComet", f, Color.White, mid, top - 4);
             Arrow(g, ax1, ax2, top + 44, true, Sending);
             Arrow(g, ax1, ax2, top + 74, false, Receiving);
