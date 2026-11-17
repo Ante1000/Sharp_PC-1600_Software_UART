@@ -23,7 +23,7 @@ namespace UartSlTest
 
         BannerPanel banner;
         CheckBox chkPad, chkEof;
-        ComboBox comboPorts, comboBaud, comboEol;
+        ComboBox comboPorts, comboBaud, comboEol, comboFlow;
         CheckBox chkAuto;
         readonly WrapToolTip tips = new WrapToolTip { AutoPopDelay = 9000, InitialDelay = 400, ReshowDelay = 200, ShowAlways = true };
         TerminalForm term;
@@ -80,25 +80,37 @@ namespace UartSlTest
             banner = new BannerPanel { Left = 10, Top = 46, Width = 700, Height = 132, Anchor = TLR };
 
             var gb = new GroupBox { Text = "Transmission mode", Left = 10, Top = 184, Width = 700, Height = 58, Anchor = TLR };
-            radioSoft = new RadioButton { Text = "Software Serial", Left = 10, Checked = true };
-            radioRs = new RadioButton { Text = "RS-232 - serial interface", Left = 130 };
-            radioSio = new RadioButton { Text = "TTL-UART", Left = 290, Enabled = false };
-            var lblBaud = new Label { Text = "Baud:", Left = 380, Top = 27, Width = 33 };
-            comboBaud = new ComboBox { Left = 414, Top = 23, Width = 56, DropDownStyle = ComboBoxStyle.DropDownList };
+            radioSoft = new RadioButton { Text = "Software Serial", Checked = true };
+            radioRs = new RadioButton { Text = "RS-232 - serial interface" };
+            radioSio = new RadioButton { Text = "TTL-UART", Enabled = false };
+            var lblBaud = new Label { Text = "Baud:" };
+            comboBaud = new ComboBox { Width = 50, DropDownStyle = ComboBoxStyle.DropDownList };
             foreach (int b in new[] { 300, 600, 1200, 2400, 4800, 9600, 19200 }) comboBaud.Items.Add(b.ToString());
             comboBaud.SelectedItem = "9600";
-            var lblDelay = new Label { Text = "Line delay:", Left = 474, Top = 27, Width = 60 };
-            numDelay = new NumericUpDown { Left = 536, Top = 23, Width = 40, Minimum = 0, Maximum = 5000, Value = 100, Increment = 50 };
-            var lblEol = new Label { Text = "Line end:", Left = 580, Top = 27, Width = 50 };
-            comboEol = new ComboBox { Left = 631, Top = 23, Width = 60, DropDownStyle = ComboBoxStyle.DropDownList };
+            var lblDelay = new Label { Text = "Delay:" };
+            numDelay = new NumericUpDown { Width = 38, Minimum = 0, Maximum = 5000, Value = 100, Increment = 50 };
+            var lblEol = new Label { Text = "EOL:" };
+            comboEol = new ComboBox { Width = 50, DropDownStyle = ComboBoxStyle.DropDownList };
             comboEol.Items.AddRange(new object[] { "CR", "CR+LF", "LF" });
             comboEol.SelectedIndex = 1;
-            foreach (RadioButton rb in new[] { radioSoft, radioRs, radioSio })
+            var lblFlow = new Label { Text = "Flow:" };
+            comboFlow = new ComboBox { Width = 74, DropDownStyle = ComboBoxStyle.DropDownList };
+            comboFlow.Items.AddRange(new object[] { "None", "XON/XOFF", "RTS/CTS", "DSR/DTR" });
+            comboFlow.SelectedIndex = 1;       // XON/XOFF, as it was fixed before
+            foreach (RadioButton rb in new[] { radioSoft, radioRs, radioSio }) rb.AutoSize = true;   // identical height and baseline
+            foreach (Label l in new[] { lblBaud, lblDelay, lblEol, lblFlow }) l.AutoSize = true;
+            // one tight row: every control placed right after the previous one (own width + a small gap)
+            var row = new Control[] { radioSoft, radioRs, radioSio, lblBaud, comboBaud, lblDelay, numDelay, lblEol, comboEol, lblFlow, comboFlow };
+            int x = 4;
+            foreach (Control c in row)
             {
-                rb.AutoSize = true;      // identical height and text baseline for all three
-                rb.Top = 24;
+                bool isLabel = c is Label;
+                c.Left = x;
+                c.Top = c is RadioButton ? 24 : isLabel ? 27 : 23;
+                int w = c is RadioButton || isLabel ? c.PreferredSize.Width : c.Width;
+                x += w + (isLabel ? 1 : c is RadioButton ? 0 : 4);
             }
-            gb.Controls.AddRange(new Control[] { radioSoft, radioRs, radioSio, lblBaud, comboBaud, lblDelay, numDelay, lblEol, comboEol });
+            gb.Controls.AddRange(row);
 
             var lblDir = new Label { Text = "Folder:", Left = 10, Top = 256, Width = 50 };
             txtDir = new TextBox
@@ -190,6 +202,7 @@ namespace UartSlTest
             btnTerminal.Click += delegate { OpenTerminal(); };
             btnAbort.Click += delegate { Abort(); };
             btnConvert.Click += delegate { ConvertSelected(); };
+            comboFlow.SelectedIndexChanged += delegate { ApplyFlow(); };
             btnLocations.Click += delegate { EditLocations(); };
             btnDelete.Click += delegate { DeleteSelected(); };
             chkAuto.CheckedChanged += delegate { RefreshFiles(); };
@@ -218,7 +231,7 @@ namespace UartSlTest
             tips.SetToolTip(radioRs, "Classic RS-232 text transfer, like a terminal program. The baud rate is selectable.");
             tips.SetToolTip(radioSio, "TTL-UART SIO text transfer through the 15-pin connector. The baud rate is selectable.");
             tips.SetToolTip(comboBaud, "Baud rate (8N1). Fixed and greyed out for Software Serial, selectable for the text modes.");
-            tips.SetToolTip(numDelay, "Pause after each line sent from a text file, in ms (the Sharp needs time to store a line).\r\n" +
+            tips.SetToolTip(numDelay, "Line delay: pause after each line sent from a text file, in ms (the Sharp needs time to store a line).\r\n" +
                 "Suggested starting values (tune by testing, raise it if lines are lost or garbled):\r\n" +
                 "  PC-1500 (CE-158): 200 ms\r\n  PC-1600: 100 ms\r\n  15-pin models: 100 ms\r\n" +
                 "The value is preset when you choose the target computer.\r\n" +
@@ -239,6 +252,7 @@ namespace UartSlTest
             tips.SetToolTip(chkAuto, "Software Serial. ON: the converter is active. A program received from the Sharp is converted to BASIC text (.bas) and BASIC files are tokenized automatically when sent; temporary .sl16 images are not kept. OFF: only .sl16 images are used, no automatic conversion (use the Convert button).");
             tips.SetToolTip(btnLocations, "Set the default folders of the programs for PC-1500, PC-1600 and the other models.");
             tips.SetToolTip(btnDelete, "Delete the selected file from the folder (after a confirmation).");
+            tips.SetToolTip(comboFlow, "Flow control for the text modes: None, XON/XOFF (default), RTS/CTS or DSR/DTR (the PC waits while the Sharp does not hold DSR). Not used by Software Serial.");
             tips.SetToolTip(txtLog, "Log of transfers and messages.");
 
             timer = new Timer { Interval = 100 };
@@ -353,12 +367,18 @@ namespace UartSlTest
         Handshake FlowMode()
         {
             if (!rs232) return Handshake.None;
-            return Handshake.XOnXOff;   // always on for the text modes (harmless when the Sharp does not use it)
+            switch (comboFlow.SelectedIndex)
+            {
+                case 0: return Handshake.None;
+                case 2: return Handshake.RequestToSend;
+                case 3: return Handshake.None;           // DSR/DTR: handled in SendFile (the port library has no DSR/DTR handshake)
+                default: return Handshake.XOnXOff;
+            }
         }
 
         void ApplyFlow()
         {
-            try { if (port != null && port.IsOpen) port.Handshake = FlowMode(); } catch (Exception ex) { Log("Error: " + ex.Message); }
+            try { if (port != null && port.IsOpen) { port.Handshake = FlowMode(); if (rs232 && comboFlow.SelectedIndex == 3) port.DtrEnable = true; } } catch (Exception ex) { Log("Error: " + ex.Message); }
         }
 
         string savedBaud = "9600";   // baud chosen by the user for the text modes
@@ -367,7 +387,7 @@ namespace UartSlTest
         void UpdateMode()
         {
             rs232 = radioRs.Checked || radioSio.Checked;
-            comboBaud.Enabled = numDelay.Enabled = btnTerminal.Enabled = comboEol.Enabled = chkPad.Enabled = chkEof.Enabled = rs232;
+            comboBaud.Enabled = numDelay.Enabled = btnTerminal.Enabled = comboEol.Enabled = comboFlow.Enabled = chkPad.Enabled = chkEof.Enabled = rs232;
             chkAuto.Enabled = !rs232;
             ApplyFlow();
             // greyed-out combo still shows the real speed of the mode: software serial = 19200 (PC-1600) or 9600 (PC-1500)
@@ -677,6 +697,7 @@ namespace UartSlTest
             bool text = rs232;
             int delay = (int)numDelay.Value;
             bool pad = chkPad.Checked, eof = chkEof.Checked;
+            bool dsrFlow = rs232 && comboFlow.SelectedIndex == 3;
             int eolIdx = comboEol.SelectedIndex;
             byte[] eol = eolIdx == 1 ? new byte[] { 13, 10 } : eolIdx == 2 ? new byte[] { 10 } : new byte[] { 13 };
             if (!text)
@@ -736,6 +757,11 @@ namespace UartSlTest
                                 if (line.Count > 0)
                                 {
                                     line.AddRange(eol);
+                                    if (dsrFlow)
+                                    {
+                                        // DSR/DTR: wait (up to 10 s) while the Sharp does not hold DSR
+                                        for (int w = 0; w < 10000 && !p.DsrHolding && !abortRequested; w += 10) System.Threading.Thread.Sleep(10);
+                                    }
                                     p.Write(line.ToArray(), 0, line.Count);
                                     line.Clear();
                                     while (p.BytesToWrite > 0 && !abortRequested) System.Threading.Thread.Sleep(5);
