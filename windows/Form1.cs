@@ -112,8 +112,8 @@ namespace UartSlTest
 
             var gbFiles = new GroupBox { Text = "Files", Left = 10, Top = 366, Width = 565, Height = 130, Anchor = TLR };   // bottom edge = bottom of the Terminal button
             lstFiles = new ListBox { Left = 6, Top = 16, Width = 553, Height = 88, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
-            chkPad = new CheckBox { Text = "Add dummy last line", Left = 8, Top = 106, Width = 140, Checked = true };
-            chkEof = new CheckBox { Text = "Send end-of-file marker (Ctrl-Z)", Left = 155, Top = 106, Width = 230 };
+            chkPad = new CheckBox { Text = "Add dummy last line", Left = 8, Top = 106, Width = 140 };
+            chkEof = new CheckBox { Text = "Send end-of-file marker (Ctrl-Z)", Left = 155, Top = 106, Width = 230, Checked = true };
             btnAbort = Btn("Abort", Icons.Cross(), 462, 102, 90, 24, TR);
             gbFiles.Controls.AddRange(new Control[] { lstFiles, chkPad, chkEof, btnAbort });
             btnSend = Btn("Send selected", Icons.Plane(), 585, 366, 125, 30, TR);
@@ -221,8 +221,8 @@ namespace UartSlTest
             tips.SetToolTip(btnRefreshFiles, "Re-read the folder and refresh the file list.");
             tips.SetToolTip(btnTerminal, "Open a terminal window (like TeraTerm): typed characters are sent, received data is shown. Text modes only.");
             tips.SetToolTip(comboEol, "Line end sent after every line of a text file: CR, CR+LF (TeraTerm style) or LF.");
-            tips.SetToolTip(chkPad, "Text modes: after the file, one extra line \"65279 REM\" is sent. The Sharp drops the last line it receives, so this sacrificial line is lost instead of the last line of your program.");
-            tips.SetToolTip(chkEof, "Text modes: after the file (and the dummy line) send the end-of-file character 1Ah (Ctrl-Z) so that the Sharp finishes the reception. Switch it off if the Sharp reports an error.");
+            tips.SetToolTip(chkPad, "Text modes: after the file, one extra line \"65279 REM\" is sent. Normally not needed when the end-of-file marker is sent; use it only if the Sharp still loses the last line.");
+            tips.SetToolTip(chkEof, "Text modes: after the file (and the dummy line) send the end-of-file character 1Ah (Ctrl-Z) so that the Sharp finishes the reception (1Ah is the end-of-file code of an ASCII file). Switch it off if the Sharp reports an error.");
             tips.SetToolTip(btnAbort, "Abort the transmission at once: stops sending the file and discards data waiting to be sent or received.");
             tips.SetToolTip(txtLog, "Log of transfers and messages.");
 
@@ -427,7 +427,14 @@ namespace UartSlTest
             {
                 int quiet = unchecked(Environment.TickCount - lastRx);
                 receiving = rx.Count > 0;
-                if (rx.Count > 0 && quiet > (rs232 ? 3000 : 800))
+                int eofAt = rs232 ? rx.IndexOf(0x1A) : -1;     // 1Ah = end-of-file code of an ASCII file: finish at once
+                if (eofAt >= 0)
+                {
+                    data = rx.GetRange(0, eofAt).ToArray();
+                    rx.Clear();
+                    receiving = false;
+                }
+                else if (rx.Count > 0 && quiet > (rs232 ? 3000 : 800))
                 {
                     data = rx.ToArray();
                     rx.Clear();
