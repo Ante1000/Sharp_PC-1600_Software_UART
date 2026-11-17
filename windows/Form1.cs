@@ -678,6 +678,9 @@ namespace UartSlTest
                 {
                     text = Pc1600Basic.Detokenize(data, ext == ".img", out problem);
                     if (problem != null) text += "\r\n[" + problem + "]";
+                    // program image: the user chooses between the original bytes and the detokenized BASIC text
+                    new PreviewForm(name + " (" + data.Length + " B)", text, HexDump(data)).Show(this);
+                    return;
                 }
                 else
                 {
@@ -692,7 +695,7 @@ namespace UartSlTest
             catch (Exception ex) { Log("View error: " + ex.Message); }
         }
 
-        static string HexDump(byte[] d)
+        internal static string HexDump(byte[] d)
         {
             var sb = new StringBuilder();
             int n = Math.Min(d.Length, 16384);
@@ -1665,20 +1668,38 @@ namespace UartSlTest
         }
     }
 
-    // Preview window (read only)
+    // Preview window (read only). With an original text too (program images) two radio buttons switch the view.
     public class PreviewForm : Form
     {
-        public PreviewForm(string title, string text)
+        readonly TextBox box;
+
+        public PreviewForm(string title, string text) : this(title, text, null) { }
+
+        public PreviewForm(string title, string text, string original)
         {
             Text = title;
             ClientSize = new Size(640, 460);
             StartPosition = FormStartPosition.CenterParent;
             try { Icon = Icons.AppIcon(); } catch { }
-            Controls.Add(new TextBox
+            box = new TextBox
             {
                 Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, WordWrap = false,
                 Font = new Font("Consolas", 9.5F), Text = text, BackColor = Color.White, SelectionStart = 0
-            });
+            };
+            Controls.Add(box);
+            if (original != null)
+            {
+                var top = new Panel { Dock = DockStyle.Top, Height = 28 };
+                var rbOrig = new RadioButton { Text = "Original content", Left = 8, Top = 5, AutoSize = true };
+                var rbDetok = new RadioButton { Text = "Detokenized", Left = 140, Top = 5, AutoSize = true, Checked = true };
+                rbOrig.CheckedChanged += delegate { if (rbOrig.Checked) { box.Text = original; box.SelectionStart = 0; } };
+                rbDetok.CheckedChanged += delegate { if (rbDetok.Checked) { box.Text = text; box.SelectionStart = 0; } };
+                top.Controls.AddRange(new Control[] { rbOrig, rbDetok });
+                var tt = new WrapToolTip { AutoPopDelay = 9000, InitialDelay = 400, ShowAlways = true };
+                tt.SetToolTip(rbOrig, "The bytes of the file (hex dump).");
+                tt.SetToolTip(rbDetok, "The program as BASIC text.");
+                Controls.Add(top);
+            }
         }
     }
 }
