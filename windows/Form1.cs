@@ -16,7 +16,8 @@ namespace UartSlTest
         readonly List<byte> rx = new List<byte>();
         readonly object rxLock = new object();
         int lastRx;
-        bool sending;
+        bool sending, blinkPhase;
+        int lastRxAny, lastTxAny;     // time of the last received / sent data (also in the terminal)
         volatile bool rs232;
 
         BannerPanel banner;
@@ -277,6 +278,7 @@ namespace UartSlTest
 
         void SendRaw(byte[] b)
         {
+            lastTxAny = Environment.TickCount;
             try { if (port != null && port.IsOpen) port.Write(b, 0, b.Length); }
             catch (Exception ex) { Log("Send error: " + ex.Message); }
         }
@@ -395,6 +397,7 @@ namespace UartSlTest
                 var buf = new byte[n];
                 n = p.Read(buf, 0, n);
                 if (n != buf.Length) Array.Resize(ref buf, n);
+                lastRxAny = Environment.TickCount;
                 var t = term;
                 if (t != null)
                 {
@@ -427,12 +430,14 @@ namespace UartSlTest
                     receiving = false;
                 }
             }
-            if (banner.Receiving != receiving || banner.Sending != sending)
-            {
-                banner.Receiving = receiving;
-                banner.Sending = sending;
-                banner.Invalidate();
-            }
+            receiving |= unchecked(Environment.TickCount - lastRxAny) < 300;
+            bool tx = sending || unchecked(Environment.TickCount - lastTxAny) < 300;
+            blinkPhase = !blinkPhase;                      // timer tick = 100 ms -> 5 flashes per second
+            bool changed = banner.Receiving != receiving || banner.Sending != tx;
+            banner.Receiving = receiving;
+            banner.Sending = tx;
+            if (receiving || tx) { banner.Blink = blinkPhase; banner.Invalidate(); }
+            else if (changed || banner.Blink) { banner.Blink = false; banner.Invalidate(); }
             if (data != null) Received(data);
         }
 
@@ -753,7 +758,7 @@ namespace UartSlTest
     // Banner: PC <-> PC-1600
     public class BannerPanel : Panel
     {
-        public bool PortOpen, Sending, Receiving;
+        public bool PortOpen, Sending, Receiving, Blink;   // Blink toggles ~5x per second while data flows
         Bitmap cometImg;
         public string ModelName = "Sharp PC-1600";
 
@@ -784,9 +789,9 @@ namespace UartSlTest
             }
         }
 
-        static void Arrow(Graphics g, int x1, int x2, int y, bool right, bool active)
+        static void Arrow(Graphics g, int x1, int x2, int y, bool right, bool active, bool blink)
         {
-            Color c = active ? Color.FromArgb(130, 225, 255) : Color.FromArgb(70, 120, 175);
+            Color c = active && blink ? Color.FromArgb(255, 150, 30) : Color.FromArgb(70, 120, 175);   // orange flash while data flows
             Point[] pts = right
                 ? new[] { new Point(x1, y - 5), new Point(x2 - 22, y - 5), new Point(x2 - 22, y - 12), new Point(x2, y), new Point(x2 - 22, y + 12), new Point(x2 - 22, y + 5), new Point(x1, y + 5) }
                 : new[] { new Point(x2, y - 5), new Point(x1 + 22, y - 5), new Point(x1 + 22, y - 12), new Point(x1, y), new Point(x1 + 22, y + 12), new Point(x1 + 22, y + 5), new Point(x2, y + 5) };
@@ -883,8 +888,8 @@ namespace UartSlTest
                 if (cometImg == null) cometImg = Icons.Comet(28);
                 g.DrawImage(cometImg, mid - g.MeasureString("SerComet", f).Width / 2 - 32, top - 6);
             }
-            Arrow(g, ax1, ax2, top + 44, true, Sending);
-            Arrow(g, ax1, ax2, top + 74, false, Receiving);
+            Arrow(g, ax1, ax2, top + 44, true, Sending, Blink);
+            Arrow(g, ax1, ax2, top + 74, false, Receiving, Blink);
             Color ok = PortOpen ? Color.FromArgb(70, 220, 90) : Color.FromArgb(90, 90, 100);
             Led(g, ok, mid - 18, top + 96);
             Led(g, ok, mid, top + 96);
