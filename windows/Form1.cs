@@ -108,11 +108,17 @@ namespace UartSlTest
             Func<Control, int> wid = c => c is RadioButton || c is Label ? c.PreferredSize.Width : c.Width;
             int used = 0;
             foreach (var g in groups) foreach (Control c in g) used += wid(c) + (c is Label ? 1 : 0);
-            int left = 6, right = gb.Width - 12;                   // usable width of the box
+            int left = 6, right = gb.Width;                        // the last field ends exactly at the right edge (like the Open button below)
             int gap = Math.Max(0, (right - left - used) / (groups.Length - 1));
             int x = left;
             foreach (var g in groups)
             {
+                if (g == groups[groups.Length - 1])             // last group flush with the right edge
+                {
+                    int lastW = 0;
+                    foreach (Control c in g) lastW += wid(c) + (c is Label ? 1 : 0);
+                    x = right - lastW;
+                }
                 foreach (Control c in g)
                 {
                     c.Left = x;
