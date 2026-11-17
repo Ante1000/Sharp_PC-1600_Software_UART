@@ -85,7 +85,7 @@ namespace UartSlTest
             radioRs = new RadioButton { Text = "RS-232 serial" };
             radioSio = new RadioButton { Text = "TTL-UART", Enabled = false };
             var lblBaud = new Label { Text = "Baud:" };
-            comboBaud = new ComboBox { Width = 62, DropDownStyle = ComboBoxStyle.DropDownList };
+            comboBaud = new ComboBox { Width = 56, DropDownStyle = ComboBoxStyle.DropDownList };
             foreach (int b in new[] { 300, 600, 1200, 2400, 4800, 9600, 19200 }) comboBaud.Items.Add(b.ToString());
             comboBaud.SelectedItem = "9600";
             var lblDelay = new Label { Text = "Delay:" };
@@ -222,14 +222,15 @@ namespace UartSlTest
             btnAbort.Click += delegate { Abort(); };
             btnConvert.Click += delegate { ConvertSelected(); };
             btnView.Click += delegate { ViewSelected(); };
-            lstFiles.SelectedIndexChanged += delegate { btnView.Enabled = lstFiles.SelectedItem != null; };
+            lstFiles.SelectedIndexChanged += delegate { SelectionChanged(); };
+            btnSend.Enabled = false;
             comboFlow.SelectedIndexChanged += delegate { ApplyFlow(); };
             btnLocations.Click += delegate { EditLocations(); };
             btnDelete.Click += delegate { DeleteSelected(); };
             chkAuto.CheckedChanged += delegate { RefreshFiles(); };
             btnSend.Click += delegate
             {
-                if (lstFiles.SelectedItem == null) { Log("Select a file in the list."); return; }
+                if (lstFiles.SelectedItem == null) return;
                 SendFile(Path.Combine(txtDir.Text, (string)lstFiles.SelectedItem));
             };
             btnSendOther.Click += delegate
@@ -460,7 +461,7 @@ namespace UartSlTest
                 }
             }
             catch (Exception ex) { Log("List error: " + ex.Message); }
-            if (btnView != null) btnView.Enabled = lstFiles.SelectedItem != null;
+            SelectionChanged();
         }
 
         void TogglePort()
@@ -711,6 +712,14 @@ namespace UartSlTest
             return sb.ToString();
         }
 
+        // View and Send selected are available only when a file is selected (Send also not while a transfer runs)
+        void SelectionChanged()
+        {
+            bool sel = lstFiles.SelectedItem != null;
+            if (btnView != null) btnView.Enabled = sel;
+            if (btnSend != null) btnSend.Enabled = sel && !sending;
+        }
+
         void DeleteSelected()
         {
             if (lstFiles.SelectedItem == null) { Log("Select a file in the list."); return; }
@@ -854,7 +863,8 @@ namespace UartSlTest
             {
                 lock (rxLock) { rx.Clear(); }
                 sending = false;
-                btnSend.Enabled = btnSendOther.Enabled = true;
+                btnSendOther.Enabled = true;
+                SelectionChanged();
             }
         }
     }
