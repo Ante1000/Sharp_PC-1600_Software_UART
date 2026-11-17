@@ -204,11 +204,15 @@ namespace UartSlTest
         // dark QWERTY keys under the LCD, dark numeric keypad under the brown panel
         static void DrawPc1600(Graphics g, int kx, int top)
         {
+            var state = g.Save();
+            g.TranslateTransform(kx, top + 60);          // whole icon scaled to 70 %
+            g.ScaleTransform(0.7F, 0.7F);
+            g.TranslateTransform(-kx, -(top + 60));
             FillRound(g, Color.FromArgb(150, 150, 146), kx - 86, top + 10, 172, 82, 6);      // shadow edge
             FillRound(g, Color.FromArgb(226, 226, 220), kx - 85, top + 8, 170, 82, 6);       // body
             using (var b = new SolidBrush(Color.FromArgb(178, 194, 122))) g.FillRectangle(b, kx - 81, top + 12, 108, 30);   // LCD, no bezel
             using (var p = new Pen(Color.FromArgb(130, 145, 90))) g.DrawRectangle(p, kx - 81, top + 12, 108, 30);
-            using (var b = new SolidBrush(Color.FromArgb(70, 50, 42))) g.FillRectangle(b, kx + 31, top + 12, 51, 30);       // brown panel
+            using (var b = new SolidBrush(Color.FromArgb(70, 50, 42))) g.FillRectangle(b, kx + 31, top + 12, 51, 21);       // brown panel (30 % lower)
             using (var f = new Font("Arial", 5.5F, FontStyle.Bold)) Text(g, "SHARP", f, Color.FromArgb(230, 225, 215), kx + 56, top + 16);
 
             Color dark = Color.FromArgb(48, 48, 54), dot = Color.FromArgb(215, 215, 210);
@@ -244,6 +248,7 @@ namespace UartSlTest
                         g.FillRectangle(bl, x + 3, y + 2, 2, 2);
                     }
             }
+            g.Restore(state);
         }
 
         protected override void OnPaint(PaintEventArgs e)
