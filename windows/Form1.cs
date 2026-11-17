@@ -120,13 +120,13 @@ namespace UartSlTest
                 Text = "Log", Left = 10, Top = 500, Width = 700, Height = 118,
                 Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
             };
-            gbLog.Controls.Add(txtLog);
             txtLog = new TextBox
             {
                 Left = 6, Top = 14, Width = 688, Height = 100, Multiline = true,
                 ScrollBars = ScrollBars.Vertical, ReadOnly = true, Font = new Font("Consolas", 9F),
                 Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
             };
+            gbLog.Controls.Add(txtLog);
 
             Controls.AddRange(new Control[] { lblPort, comboPorts, btnRefresh, btnOpen, led, gbTarget, banner, gb,
                 lblDir, txtDir, btnBrowse, btnOpenDir, gbInfo, gbFiles, btnSend, btnSendOther, btnRefreshFiles, btnTerminal, gbLog });
