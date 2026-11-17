@@ -81,7 +81,7 @@ namespace UartSlTest
 
             var gb = new GroupBox { Text = "Transmission mode", Left = 10, Top = 184, Width = 700, Height = 58, Anchor = TLR };
             radioSoft = new RadioButton { Text = "Software Serial", Checked = true };
-            radioRs = new RadioButton { Text = "RS-232 - serial I/F" };
+            radioRs = new RadioButton { Text = "RS-232 serial I/F" };
             radioSio = new RadioButton { Text = "TTL-UART", Enabled = false };
             var lblBaud = new Label { Text = "Baud:" };
             comboBaud = new ComboBox { Width = 50, DropDownStyle = ComboBoxStyle.DropDownList };
@@ -108,7 +108,7 @@ namespace UartSlTest
             Func<Control, int> wid = c => c is RadioButton || c is Label ? c.PreferredSize.Width : c.Width;
             int used = 0;
             foreach (var g in groups) foreach (Control c in g) used += wid(c) + (c is Label ? 1 : 0);
-            int left = 6, right = gb.Width;                        // the last field ends exactly at the right edge (like the Open button below)
+            int left = 8, right = gb.Width - 8;                      // the last field ends exactly at the right edge (like the Open button below)
             int gap = Math.Max(0, (right - left - used) / (groups.Length - 1));
             int x = left;
             foreach (var g in groups)
@@ -284,7 +284,7 @@ namespace UartSlTest
             bool p1500 = radio1500.Checked;
             radioSoft.Enabled = radioRs.Enabled = !other;
             radioSio.Enabled = other;
-            radioRs.Text = "RS-232 - serial I/F";
+            radioRs.Text = "RS-232 serial I/F";
             if (other) radioSio.Checked = true;
             else if (radioSio.Checked) radioSoft.Checked = true;
             banner.ModelName = other ? "Sharp with 15-pin connector" : p1500 ? "Sharp PC-1500" : "Sharp PC-1600";
