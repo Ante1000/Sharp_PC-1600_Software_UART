@@ -27,7 +27,7 @@ namespace UartSlTest
         CheckBox chkAuto;
         readonly WrapToolTip tips = new WrapToolTip { AutoPopDelay = 9000, InitialDelay = 400, ReshowDelay = 200, ShowAlways = true };
         TerminalForm term;
-        Button btnTerminal, btnAbort, btnConvert, btnLocations;
+        Button btnTerminal, btnAbort, btnConvert, btnLocations, btnDelete;
         // default folders of the target computers: PC-1500, PC-1600, other 15-pin models
         string[] locs = LoadLocations();
         Button btnRefresh, btnOpen, btnBrowse, btnOpenDir, btnSend, btnSendOther, btnRefreshFiles;
@@ -114,22 +114,23 @@ namespace UartSlTest
             lblHint = new Label { Left = 8, Top = 14, Width = 684, Height = 67, Anchor = TLR };
             gbInfo.Controls.Add(lblHint);
 
-            var gbFiles = new GroupBox { Text = "Files", Left = 10, Top = 366, Width = 565, Height = 130, Anchor = TLR };   // bottom edge = bottom of the Terminal button
-            lstFiles = new ListBox { Left = 6, Top = 16, Width = 553, Height = 88, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
-            chkPad = new CheckBox { Text = "Add dummy last line", Left = 8, Top = 106, Width = 140 };
-            chkEof = new CheckBox { Text = "Add EOF marker", Left = 150, Top = 106, Width = 110, Checked = true };
-            chkAuto = new CheckBox { Text = "Auto tokenize", Left = 262, Top = 106, Width = 108, Checked = true };
-            btnAbort = Btn("Abort", Icons.Cross(), 468, 102, 90, 24, TR);
-            btnConvert = Btn("Convert", Icons.File(), 374, 102, 90, 24, TR);
+            var gbFiles = new GroupBox { Text = "Files", Left = 10, Top = 366, Width = 565, Height = 176, Anchor = TLR };   // bottom edge = bottom of the Terminal button
+            lstFiles = new ListBox { Left = 6, Top = 16, Width = 553, Height = 134, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
+            chkPad = new CheckBox { Text = "Add dummy last line", Left = 8, Top = 152, Width = 140 };
+            chkEof = new CheckBox { Text = "Add EOF marker", Left = 150, Top = 152, Width = 110, Checked = true };
+            chkAuto = new CheckBox { Text = "Auto tokenize", Left = 262, Top = 152, Width = 108, Checked = true };
+            btnAbort = Btn("Abort", Icons.Cross(), 468, 148, 90, 24, TR);
+            btnConvert = Btn("Convert", Icons.File(), 374, 148, 90, 24, TR);
             gbFiles.Controls.AddRange(new Control[] { lstFiles, chkPad, chkEof, chkAuto, btnConvert, btnAbort });
             btnSend = Btn("Send selected", Icons.Plane(), 585, 366, 125, 30, TR);
             btnSendOther = Btn("Send file...", Icons.File(), 585, 400, 125, 30, TR);
             btnRefreshFiles = Btn("Refresh list", Icons.Refresh(), 585, 434, 125, 30, TR);
-            btnTerminal = Btn("Terminal", Icons.Terminal(), 585, 468, 125, 28, TR);
+            btnDelete = Btn("Delete file", Icons.Cross(), 585, 476, 125, 30, TR);
+            btnTerminal = Btn("Terminal", Icons.Terminal(), 585, 514, 125, 28, TR);
 
             var gbLog = new GroupBox
             {
-                Text = "Log", Left = 10, Top = 500, Width = 700, Height = 118,
+                Text = "Log", Left = 10, Top = 546, Width = 700, Height = 118,
                 Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
             };
             txtLog = new TextBox
@@ -141,7 +142,7 @@ namespace UartSlTest
             gbLog.Controls.Add(txtLog);
 
             Controls.AddRange(new Control[] { lblPort, comboPorts, btnRefresh, btnOpen, led, gbTarget, banner, gb,
-                lblDir, txtDir, btnLocations, btnBrowse, btnOpenDir, gbInfo, gbFiles, btnSend, btnSendOther, btnRefreshFiles, btnTerminal, gbLog });
+                lblDir, txtDir, btnLocations, btnBrowse, btnOpenDir, gbInfo, gbFiles, btnSend, btnSendOther, btnRefreshFiles, btnDelete, btnTerminal, gbLog });
 
             // title row: everything else moves down by one row (40 px)
             foreach (Control c in Controls) c.Top += 40;
@@ -190,6 +191,7 @@ namespace UartSlTest
             btnAbort.Click += delegate { Abort(); };
             btnConvert.Click += delegate { ConvertSelected(); };
             btnLocations.Click += delegate { EditLocations(); };
+            btnDelete.Click += delegate { DeleteSelected(); };
             chkAuto.CheckedChanged += delegate { RefreshFiles(); };
             btnSend.Click += delegate
             {
@@ -236,6 +238,7 @@ namespace UartSlTest
             tips.SetToolTip(btnConvert, "Convert the selected file: program image (.sl16 / .img) to BASIC text (.bas), or BASIC text to a program image (PC-1600: .sl16, PC-1500: .img).");
             tips.SetToolTip(chkAuto, "Software Serial. ON: the converter is active. A program received from the Sharp is converted to BASIC text (.bas) and BASIC files are tokenized automatically when sent; temporary .sl16 images are not kept. OFF: only .sl16 images are used, no automatic conversion (use the Convert button).");
             tips.SetToolTip(btnLocations, "Set the default folders of the programs for PC-1500, PC-1600 and the other models.");
+            tips.SetToolTip(btnDelete, "Delete the selected file from the folder (after a confirmation).");
             tips.SetToolTip(txtLog, "Log of transfers and messages.");
 
             timer = new Timer { Interval = 100 };
@@ -616,6 +619,21 @@ namespace UartSlTest
                 RefreshFiles();
             }
             catch (Exception ex) { Log("Conversion error: " + ex.Message); }
+        }
+
+        void DeleteSelected()
+        {
+            if (lstFiles.SelectedItem == null) { Log("Select a file in the list."); return; }
+            string name = (string)lstFiles.SelectedItem;
+            using (var d = new DeleteConfirmForm(name))
+                if (d.ShowDialog(this) != DialogResult.OK) return;
+            try
+            {
+                File.Delete(Path.Combine(txtDir.Text, name));
+                Log("Deleted " + name);
+            }
+            catch (Exception ex) { Log("Delete error: " + ex.Message); }
+            RefreshFiles();
         }
 
         static string UniquePathIn(string dir, string name, string ext)
@@ -1536,6 +1554,28 @@ namespace UartSlTest
                 Result = new string[3];
                 for (int i = 0; i < 3; i++) Result[i] = boxes[i].Text.Trim().Length > 0 ? boxes[i].Text.Trim() : defaults[i];
             };
+        }
+    }
+
+    // Confirmation before a file is deleted: "Delete file" / "Cancel"
+    public class DeleteConfirmForm : Form
+    {
+        public DeleteConfirmForm(string fileName)
+        {
+            Text = "Delete file";
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MaximizeBox = MinimizeBox = false;
+            ShowInTaskbar = false;
+            StartPosition = FormStartPosition.CenterParent;
+            ClientSize = new Size(360, 120);
+            try { Icon = Icons.AppIcon(); } catch { }
+            Controls.Add(new Label { Text = "Delete this file permanently?", Left = 14, Top = 14, Width = 330, Height = 20 });
+            Controls.Add(new Label { Text = fileName, Left = 14, Top = 38, Width = 330, Height = 36, Font = new Font("Segoe UI", 9F, FontStyle.Bold) });
+            var del = new Button { Text = "Delete file", Left = 150, Top = 82, Width = 95, Height = 26, DialogResult = DialogResult.OK };
+            var cancel = new Button { Text = "Cancel", Left = 252, Top = 82, Width = 95, Height = 26, DialogResult = DialogResult.Cancel };
+            Controls.AddRange(new Control[] { del, cancel });
+            AcceptButton = cancel;      // Enter = the safe choice
+            CancelButton = cancel;
         }
     }
 }
