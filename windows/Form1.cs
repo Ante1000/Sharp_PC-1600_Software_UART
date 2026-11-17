@@ -23,7 +23,8 @@ namespace UartSlTest
 
         BannerPanel banner;
         CheckBox chkPad, chkEof;
-        ComboBox comboPorts, comboBaud, comboEol, comboRecv;
+        ComboBox comboPorts, comboBaud, comboEol;
+        CheckBox chkAuto;
         readonly ToolTip tips = new ToolTip { AutoPopDelay = 9000, InitialDelay = 400, ReshowDelay = 200, ShowAlways = true };
         TerminalForm term;
         Button btnTerminal, btnAbort, btnConvert;
@@ -100,14 +101,9 @@ namespace UartSlTest
             var lblDir = new Label { Text = "Folder:", Left = 10, Top = 256, Width = 50 };
             txtDir = new TextBox
             {
-                Left = 65, Top = 252, Width = 290, Anchor = TLR,
+                Left = 65, Top = 252, Width = 460, Anchor = TLR,
                 Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "PC1600")
             };
-            var lblRecv = new Label { Text = "Received file:", Left = 360, Top = 256, Width = 75 };
-            comboRecv = new ComboBox { Left = 436, Top = 252, Width = 90, DropDownStyle = ComboBoxStyle.DropDownList, Anchor = TR };
-            comboRecv.Items.AddRange(new object[] { "Image", "BASIC" });
-            comboRecv.SelectedIndex = 0;
-            lblRecv.Anchor = TR;
             btnBrowse = Btn("Browse...", Icons.Folder(), 530, 249, 92, 28, TR);
             btnOpenDir = Btn("Open", Icons.Folder(), 628, 249, 82, 28, TR);
 
@@ -118,10 +114,11 @@ namespace UartSlTest
             var gbFiles = new GroupBox { Text = "Files", Left = 10, Top = 366, Width = 565, Height = 130, Anchor = TLR };   // bottom edge = bottom of the Terminal button
             lstFiles = new ListBox { Left = 6, Top = 16, Width = 553, Height = 88, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
             chkPad = new CheckBox { Text = "Add dummy last line", Left = 8, Top = 106, Width = 140 };
-            chkEof = new CheckBox { Text = "Send end-of-file marker (Ctrl-Z)", Left = 150, Top = 106, Width = 220, Checked = true };
+            chkEof = new CheckBox { Text = "Add EOF marker", Left = 150, Top = 106, Width = 110, Checked = true };
+            chkAuto = new CheckBox { Text = "Auto tokenize", Left = 262, Top = 106, Width = 108, Checked = true };
             btnAbort = Btn("Abort", Icons.Cross(), 468, 102, 90, 24, TR);
             btnConvert = Btn("Convert", Icons.File(), 374, 102, 90, 24, TR);
-            gbFiles.Controls.AddRange(new Control[] { lstFiles, chkPad, chkEof, btnConvert, btnAbort });
+            gbFiles.Controls.AddRange(new Control[] { lstFiles, chkPad, chkEof, chkAuto, btnConvert, btnAbort });
             btnSend = Btn("Send selected", Icons.Plane(), 585, 366, 125, 30, TR);
             btnSendOther = Btn("Send file...", Icons.File(), 585, 400, 125, 30, TR);
             btnRefreshFiles = Btn("Refresh list", Icons.Refresh(), 585, 434, 125, 30, TR);
@@ -141,7 +138,7 @@ namespace UartSlTest
             gbLog.Controls.Add(txtLog);
 
             Controls.AddRange(new Control[] { lblPort, comboPorts, btnRefresh, btnOpen, led, gbTarget, banner, gb,
-                lblDir, txtDir, lblRecv, comboRecv, btnBrowse, btnOpenDir, gbInfo, gbFiles, btnSend, btnSendOther, btnRefreshFiles, btnTerminal, gbLog });
+                lblDir, txtDir, btnBrowse, btnOpenDir, gbInfo, gbFiles, btnSend, btnSendOther, btnRefreshFiles, btnTerminal, gbLog });
 
             // title row: everything else moves down by one row (40 px)
             foreach (Control c in Controls) c.Top += 40;
@@ -189,6 +186,7 @@ namespace UartSlTest
             btnTerminal.Click += delegate { OpenTerminal(); };
             btnAbort.Click += delegate { Abort(); };
             btnConvert.Click += delegate { ConvertSelected(); };
+            chkAuto.CheckedChanged += delegate { RefreshFiles(); };
             btnSend.Click += delegate
             {
                 if (lstFiles.SelectedItem == null) { Log("Select a file in the list."); return; }
@@ -198,7 +196,7 @@ namespace UartSlTest
             {
                 using (var d = new OpenFileDialog())
                 {
-                    d.Filter = rs232 ? "BASIC text (*.bas;*.txt)|*.bas;*.txt|All files|*.*" : "PC-1600 files (*.sl16;*.bas;*.txt)|*.sl16;*.bas;*.txt|All files|*.*";
+                    d.Filter = rs232 ? "BASIC text (*.bas;*.txt)|*.bas;*.txt|All files|*.*" : chkAuto.Checked ? "PC-1600 files (*.sl16;*.bas;*.txt)|*.sl16;*.bas;*.txt|All files|*.*" : "PC-1600 images (*.sl16)|*.sl16|All files|*.*";
                     if (d.ShowDialog() == DialogResult.OK) SendFile(d.FileName);
                 }
             };
@@ -229,10 +227,10 @@ namespace UartSlTest
             tips.SetToolTip(btnTerminal, "Open a terminal window (like TeraTerm): typed characters are sent, received data is shown. Text modes only.");
             tips.SetToolTip(comboEol, "Line end sent after every line of a text file: CR, CR+LF (TeraTerm style) or LF.");
             tips.SetToolTip(chkPad, "Text modes: after the file, one extra line \"65279 REM\" is sent. Normally not needed when the end-of-file marker is sent; use it only if the Sharp still loses the last line.");
-            tips.SetToolTip(chkEof, "Text modes: after the file (and the dummy line) send the end-of-file character 1Ah (Ctrl-Z) so that the Sharp finishes the reception (1Ah is the end-of-file code of an ASCII file). Switch it off if the Sharp reports an error.");
+            tips.SetToolTip(chkEof, "Add the end-of-file marker. Text modes: after the file (and the dummy line) send the end-of-file character 1Ah (Ctrl-Z) so that the Sharp finishes the reception (1Ah is the end-of-file code of an ASCII file). Switch it off if the Sharp reports an error.");
             tips.SetToolTip(btnAbort, "Abort the transmission at once: stops sending the file and discards data waiting to be sent or received.");
-            tips.SetToolTip(comboRecv, "Software Serial: what to do with a program received from the Sharp. Image = raw program image (.sl16, can be sent back as it is). BASIC = convert to a readable BASIC text file (.bas).");
             tips.SetToolTip(btnConvert, "Convert the selected file: program image (.sl16 / .img) to BASIC text (.bas), or BASIC text to a program image (PC-1600: .sl16, PC-1500: .img).");
+            tips.SetToolTip(chkAuto, "Software Serial. ON: the converter is active. A program received from the Sharp is converted to BASIC text (.bas) and BASIC files are tokenized automatically when sent; temporary .sl16 images are not kept. OFF: only .sl16 images are used, no automatic conversion (use the Convert button).");
             tips.SetToolTip(txtLog, "Log of transfers and messages.");
 
             timer = new Timer { Interval = 100 };
@@ -315,7 +313,7 @@ namespace UartSlTest
         {
             rs232 = radioRs.Checked || radioSio.Checked;
             comboBaud.Enabled = numDelay.Enabled = btnTerminal.Enabled = comboEol.Enabled = chkPad.Enabled = chkEof.Enabled = rs232;
-            comboRecv.Enabled = !rs232;
+            chkAuto.Enabled = !rs232;
             ApplyFlow();
             // greyed-out combo still shows the real speed of the mode: software serial = 19200 (PC-1600) or 9600 (PC-1500)
             comboBaud.SelectedItem = rs232 ? savedBaud : (radio1500.Checked ? "9600" : "19200");
@@ -359,7 +357,7 @@ namespace UartSlTest
                 if (Directory.Exists(txtDir.Text))
                 {
                     var found = new List<string>();
-                    foreach (string pat in rs232 ? new[] { "*.bas", "*.txt" } : new[] { "*.sl16", "*.img", "*.bas", "*.txt" })
+                    foreach (string pat in rs232 ? new[] { "*.bas", "*.txt" } : chkAuto.Checked ? new[] { "*.sl16", "*.bas", "*.txt" } : new[] { "*.sl16" })
                         foreach (string f in Directory.GetFiles(txtDir.Text, pat)) found.Add(Path.GetFileName(f));
                     found.Sort(StringComparer.OrdinalIgnoreCase);
                     lstFiles.Items.AddRange(found.ToArray());
@@ -485,20 +483,27 @@ namespace UartSlTest
                 if (Sl16.Check(data, out err))
                 {
                     string name = Sl16.NameFromRem(data) ?? "PROGRAM_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
-                    string path = UniquePath(name, ".sl16");
-                    File.WriteAllBytes(path, data);
-                    Log("RECEIVED " + data.Length + " B, " + Sl16.CountLines(data) + " lines, checksum OK -> " + Path.GetFileName(path));
-                    if (comboRecv.SelectedIndex == 1)
+                    string path = null;
+                    string note = "";
+                    if (chkAuto.Checked && !radio1500.Checked)
                     {
-                        if (!radio1500.Checked)
+                        // auto tokenize ON: the image only exists in memory, the file is BASIC text
+                        string problem;
+                        string bas = Pc1600Basic.Detokenize(data, out problem);
+                        if (problem == null)
                         {
-                            string problem;
-                            string bas = Pc1600Basic.Detokenize(data, out problem);
-                            string bpath = UniquePath(name, ".bas");
-                            File.WriteAllBytes(bpath, Encoding.GetEncoding(28591).GetBytes(bas));
-                            Log("Converted the PC-1600 intermediate code to BASIC text -> " + Path.GetFileName(bpath) + (problem != null ? " (warning: " + problem + ")" : ""));
+                            path = UniquePath(name, ".bas");
+                            File.WriteAllBytes(path, Encoding.GetEncoding(28591).GetBytes(bas));
+                            note = " (converted from the PC-1600 intermediate code)";
                         }
+                        else Log("Conversion problem: " + problem + "; the image is kept as .sl16.");
                     }
+                    if (path == null)
+                    {
+                        path = UniquePath(name, ".sl16");
+                        File.WriteAllBytes(path, data);
+                    }
+                    Log("RECEIVED " + data.Length + " B, " + Sl16.CountLines(data) + " lines, checksum OK -> " + Path.GetFileName(path) + note);
                     RefreshFiles();
                 }
                 else
@@ -609,6 +614,7 @@ namespace UartSlTest
                 string err;
                 if (!path.EndsWith(".sl16", StringComparison.OrdinalIgnoreCase))
                 {
+                    if (!chkAuto.Checked) { Log("Auto tokenize is off: only .sl16 files can be sent (use Convert or switch Auto tokenize on)."); return; }
                     // BASIC text: convert to the intermediate code of the Sharp first
                     if (radio1500.Checked) { Log("Software Serial (Saver/Loader) does not exist for the PC-1500 yet. Use RS-232 or the Convert button."); return; }
                     Log("Tokenizing to the PC-1600 intermediate code format...");
