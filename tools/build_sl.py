@@ -26,10 +26,9 @@ def build():
 
     def add(n, t):
         L.append((n, t))
-    add(10, 'REM UART1600 SL V1.1: SAVER AND LOADER OF BASIC PROGRAMS, 19200 BPS')
-    add(20, 'REM PC-1600 MODE 0. TX=CN9 PIN 29, RX=CN9 PIN 27. USE AS DIRECT COMMANDS')
+    add(10, 'REM UART1600 SL V1.2')
     add(30, 'CLEAR:WAIT 0:BEEP OFF')
-    add(40, 'A=0:INPUT "ML ADDRESS (ENTER=49349) ";A')
+    add(40, 'A=0:INPUT "ADDR (ENTER=49349) ";A')
     add(50, 'IF A=0 THEN LET A=49349')
     add(60, 'IF A<49152 OR A>64000 THEN LET A=0:GOTO 40')
     add(70, 'RESTORE 1000:READ N:C=0')
@@ -40,15 +39,12 @@ def build():
     add(120, 'P=PEEK(65084)+256*PEEK(65085)')
     add(130, 'Q=PEEK(65087)+256*PEEK(65088)')
     add(140, 'IF Q<P OR P<32768 THEN GOTO 910')
-    add(145, 'R=PEEK(63592)+256*PEEK(63593)')
-    add(146, 'IF R<>Q THEN PRINT "F868H<>FE3FH?"')
     add(150, 'CLS:PRINT "UART1600 SL READY"')
     add(160, 'PRINT "SAVE: CALL ";A;",X"')
     add(170, 'PRINT "LOAD: CALL ";A+%d;",X"' % lab['LOAD'])
-    add(180, 'PRINT "PROGRAM ";P;" TO ";Q')
     add(190, 'END')
-    add(900, 'PRINT "DATA ERROR: CHECK THE LISTING":BEEP 3:END')
-    add(910, 'PRINT "POINTERS?":PRINT P;" ";Q:BEEP 3:END')
+    add(900, 'PRINT "DATA ERROR":BEEP 3:END')
+    add(910, 'PRINT "POINTERS?":BEEP 3:END')
     add(1000, 'DATA %d' % len(segs))
     n = 1010
     tot = 0
@@ -56,8 +52,17 @@ def build():
         add(n, 'DATA %d,%d' % (a, b - a))
         n += 10
         vals = list(code[a:b]); tot += sum(vals)
-        for i in range(0, len(vals), 14):
-            add(n, 'DATA ' + ','.join(str(v) for v in vals[i:i + 14]))
+        # pack as many numbers as fit into one line (<= 72 characters, so that the whole line is <= 80): the text is received over RS-232 and the
+        # Sharp accepts only about 2 KB per LOAD, so the listing must stay short
+        row = []
+        for v in vals:
+            if row and len('DATA ' + ','.join(row + [str(v)])) > 72:
+                add(n, 'DATA ' + ','.join(row))
+                n += 10
+                row = []
+            row.append(str(v))
+        if row:
+            add(n, 'DATA ' + ','.join(row))
             n += 10
     add(n, 'DATA %d' % tot)
     L.sort()

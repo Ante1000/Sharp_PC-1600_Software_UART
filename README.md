@@ -60,7 +60,7 @@ used. According to the PC-1600 schematic and the Technical Reference the levels 
 | `wav/uart1600.wav` | tape recording of the program for `LOAD "CAS:UART1600"` (about 5 minutes) |
 | `tools/pc1600_bas2wav.py` | BASIC text -> tape recording (WAV) and decoder check (from the PC-1600 game repository); lines must not exceed 80 characters |
 | `Basic/pc1600_memfinder.txt`, `wav/pc1600_memfinder.wav` | diagnostic program: finds the BASIC program in the RAM and the pointers in the work area and sends a report through UART1600 (for a future Saver/Loader of BASIC programs) |
-| `Basic/uart1600_sl.txt` | **Saver/Loader**: BASIC installer (about 50 lines) of the machine-language SAVE and LOAD of BASIC programs through the UART, fixed 19200 bps |
+| `Basic/uart1600_sl.txt` | **Saver/Loader**: BASIC installer (about 40 lines, 1.9 KB) of the machine-language SAVE and LOAD of BASIC programs through the UART, fixed 19200 bps |
 | `asm/uart1600_sl.asm` | source of SAVE and LOAD (position independent, no buffer) |
 | `tools/build_sl.py`, `tools/verify_sl.py` | makes `Basic/uart1600_sl.txt`; emulator test of SAVE and LOAD |
 | `asm/uart1600.asm` | source of SEROUT, SERIN and PROBE (assembler: `z80asm`) with all comments |
@@ -237,7 +237,7 @@ A separate, small program (like the SAVER/LOADER of the PC-1500): it puts two ma
 **send a BASIC program to the terminal (TeraTerm) and load it back**, as a binary file. It needs UART1600 only for the wiring
 (pins 27, 29, ground) and the same TTL partner, not as software: SL has its own bit routines, fixed at **19200 bps 8N1**.
 
-1. Install it: type in or send `Basic/uart1600_sl.txt` (about 50 lines, `DATA` with a checksum), `RUN`, ENTER for the ML address
+1. Install it: type in or send `Basic/uart1600_sl.txt` (about 40 lines, 1.9 KB, `DATA` with a checksum; keep it short: a PC-1600 receives only about 2 KB of text per `LOAD "COM1:"`), `RUN`, ENTER for the ML address
    (49349 = `C0C5H`; the code is about 370 bytes and **replaces UART1600 if it is at the same address**: give another address,
    e.g. 50200, when both are wanted). The program checks the pointers of the BASIC (`FE3CH`, `FE3FH`) and shows the addresses:
    `SAVE: CALL A,X` and `LOAD: CALL A+176,X`. Then `NEW` (without an address) deletes the installer; the routines stay.
@@ -260,7 +260,7 @@ A separate, small program (like the SAVER/LOADER of the PC-1500): it puts two ma
   `STATUS 1` is the difference of the end and the start. SAVE sends the bytes from the start to the marker (not the marker).
   LOAD stores the file from the start, writes the marker over the checksum byte and sets both pointers; after an error (2 or 4) it leaves the
   memory empty (`FFH` at the start, both pointers = start), as `NEW` does. Without the marker the BASIC listed the rest of an older program.
-  The installer checks that `F868H` and `FE3FH` hold the same address.
+  The routines themselves set both pointers.
 - In RUN mode one command per line: a line with two statements separated by `:` (`POKE ... : POKE ...`) was refused on the test machine.
 - The emulator test (`tools/verify_sl.py`): SAVE gives exactly the bytes of the program plus the checksum; LOAD takes the stream
   without any gap at all phases and +-3 % of the speed, keeps the registers of the BASIC (also the alternate ones), and
