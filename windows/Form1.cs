@@ -103,12 +103,12 @@ namespace UartSlTest
             var lblDir = new Label { Text = "Folder:", Left = 10, Top = 256, Width = 50 };
             txtDir = new TextBox
             {
-                Left = 65, Top = 252, Width = 385, Anchor = TLR,
+                Left = 65, Top = 252, Width = 405, Anchor = TLR,
                 Text = locs[1]
             };
-            btnLocations = Btn("Folders", Icons.Folder(), 456, 249, 76, 28, TR);
-            btnBrowse = Btn("Browse...", Icons.Folder(), 536, 249, 88, 28, TR);
-            btnOpenDir = Btn("Open", Icons.Folder(), 628, 249, 82, 28, TR);
+            btnLocations = Btn("Folders", Icons.Folder(), 474, 249, 76, 28, TR);
+            btnBrowse = Btn("Browse...", Icons.Folder(), 554, 249, 76, 28, TR);
+            btnOpenDir = Btn("Open", Icons.Folder(), 634, 249, 76, 28, TR);
 
             var gbInfo = new GroupBox { Text = "Info", Left = 10, Top = 280, Width = 700, Height = 84, Anchor = TLR };
             lblHint = new Label { Left = 8, Top = 14, Width = 684, Height = 67, Anchor = TLR };
