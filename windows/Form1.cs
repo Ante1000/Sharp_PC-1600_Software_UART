@@ -20,6 +20,7 @@ namespace UartSlTest
         volatile bool rs232;
 
         BannerPanel banner;
+        CheckBox chkPad;
         ComboBox comboPorts, comboBaud, comboEol;
         readonly ToolTip tips = new ToolTip { AutoPopDelay = 9000, InitialDelay = 400, ReshowDelay = 200, ShowAlways = true };
         TerminalForm term;
@@ -108,8 +109,9 @@ namespace UartSlTest
             gbInfo.Controls.Add(lblHint);
 
             var gbFiles = new GroupBox { Text = "Files", Left = 10, Top = 366, Width = 565, Height = 130, Anchor = TLR };   // bottom edge = bottom of the Terminal button
-            lstFiles = new ListBox { Left = 6, Top = 16, Width = 553, Height = 108, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
-            gbFiles.Controls.Add(lstFiles);
+            lstFiles = new ListBox { Left = 6, Top = 16, Width = 553, Height = 88, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
+            chkPad = new CheckBox { Text = "Add dummy last line (the Sharp drops the last line it receives)", Left = 8, Top = 106, Width = 548, Checked = true };
+            gbFiles.Controls.AddRange(new Control[] { lstFiles, chkPad });
             btnSend = Btn("Send selected", Icons.Plane(), 585, 366, 125, 30, TR);
             btnSendOther = Btn("Send file...", Icons.File(), 585, 400, 125, 30, TR);
             btnRefreshFiles = Btn("Refresh list", Icons.Refresh(), 585, 434, 125, 30, TR);
@@ -214,6 +216,7 @@ namespace UartSlTest
             tips.SetToolTip(btnRefreshFiles, "Re-read the folder and refresh the file list.");
             tips.SetToolTip(btnTerminal, "Open a terminal window (like TeraTerm): typed characters are sent, received data is shown. Text modes only.");
             tips.SetToolTip(comboEol, "Line end sent after every line of a text file: CR, CR+LF (TeraTerm style) or LF.");
+            tips.SetToolTip(chkPad, "Text modes: after the file, one extra line \"65279 REM\" is sent. The Sharp drops the last line it receives, so this sacrificial line is lost instead of the last line of your program.");
             tips.SetToolTip(txtLog, "Log of transfers and messages.");
 
             timer = new Timer { Interval = 100 };
@@ -294,7 +297,7 @@ namespace UartSlTest
         void UpdateMode()
         {
             rs232 = radioRs.Checked || radioSio.Checked;
-            comboBaud.Enabled = numDelay.Enabled = btnTerminal.Enabled = comboEol.Enabled = rs232;
+            comboBaud.Enabled = numDelay.Enabled = btnTerminal.Enabled = comboEol.Enabled = chkPad.Enabled = rs232;
             ApplyFlow();
             // greyed-out combo still shows the real speed of the mode: software serial = 19200 (PC-1600) or 9600 (PC-1500)
             comboBaud.SelectedItem = rs232 ? savedBaud : (radio1500.Checked ? "9600" : "19200");
@@ -496,6 +499,7 @@ namespace UartSlTest
             catch (Exception ex) { Log("Read error: " + ex.Message); return; }
             bool text = rs232;
             int delay = (int)numDelay.Value;
+            bool pad = chkPad.Checked;
             int eolIdx = comboEol.SelectedIndex;
             byte[] eol = eolIdx == 1 ? new byte[] { 13, 10 } : eolIdx == 2 ? new byte[] { 10 } : new byte[] { 13 };
             if (!text)
@@ -551,6 +555,13 @@ namespace UartSlTest
                             }
                             else line.Add(data[i]);
                         }
+                    }
+                    if (text && pad)
+                    {
+                        // sacrificial last line: the Sharp does not keep the last line it receives
+                        var dummy = new List<byte>(Encoding.ASCII.GetBytes("65279 REM"));
+                        dummy.AddRange(eol);
+                        p.Write(dummy.ToArray(), 0, dummy.Count);
                     }
                     while (p.BytesToWrite > 0) System.Threading.Thread.Sleep(10);
                     report(100);
