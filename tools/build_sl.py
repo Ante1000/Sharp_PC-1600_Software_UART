@@ -26,7 +26,7 @@ def build():
 
     def add(n, t):
         L.append((n, t))
-    add(10, 'REM UART1600 SL V1.0: SAVER AND LOADER OF BASIC PROGRAMS, 19200 BPS')
+    add(10, 'REM UART1600 SL V1.1: SAVER AND LOADER OF BASIC PROGRAMS, 19200 BPS')
     add(20, 'REM PC-1600 MODE 0. TX=CN9 PIN 29, RX=CN9 PIN 27. USE AS DIRECT COMMANDS')
     add(30, 'CLEAR:WAIT 0:BEEP OFF')
     add(40, 'A=0:INPUT "ML ADDRESS (ENTER=49349) ";A')
@@ -40,6 +40,8 @@ def build():
     add(120, 'P=PEEK(65084)+256*PEEK(65085)')
     add(130, 'Q=PEEK(65087)+256*PEEK(65088)')
     add(140, 'IF Q<P OR P<32768 THEN GOTO 910')
+    add(145, 'R=PEEK(63592)+256*PEEK(63593)')
+    add(146, 'IF R<>Q THEN PRINT "F868H<>FE3FH?"')
     add(150, 'CLS:PRINT "UART1600 SL READY"')
     add(160, 'PRINT "SAVE: CALL ";A;",X"')
     add(170, 'PRINT "LOAD: CALL ";A+%d;",X"' % lab['LOAD'])

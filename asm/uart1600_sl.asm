@@ -4,7 +4,8 @@
 ; byte: the sum of all the bytes before it, modulo 256. The end of a received file is 0.5 s without a byte.
 ; Pointers of the BASIC (found with the memory finder): FE3CH = start of the program (2 bytes + 1), FE3FH = its end.
 ; CALL SAVE,X sends the program (X = 1 when done). CALL LOAD,X waits up to 30 s for a file, stores it from the start
-; of the program and sets the end pointer: X = 1 ok, 2 checksum error, 3 nothing received, 4 does not fit.
+; of the program, puts the end marker FFH after the last line and sets both end pointers (FE3FH and F868H):
+; X = 1 ok, 2 checksum error, 3 nothing received, 4 does not fit. After an error 2 or 4 the memory is left empty (as after NEW).
 ; Use them as direct commands (RUN mode), not in a program. The code needs no buffer, has no CALLs, no absolute jumps
 ; and no absolute operands except the two pointers of the BASIC: it can be placed at any address.
 OPC: equ 0x18
@@ -12,6 +13,7 @@ DDB: equ 0x1D
 OPB: equ 0x1F
 PS:  equ 0xFE3C
 PE:  equ 0xFE3F
+PE2: equ 0xF868          ; a second copy of the end pointer (the BASIC takes the end of the program from it)
 
  org 0
 ;---------------------------------------------------------------- SAVE
@@ -217,7 +219,7 @@ ld_d2:
  cp e
  jr c,ld_next         ; still inside the memory
  ld e,4               ; it does not fit
- jr ld_exit
+ jr ld_bad
 ld_tmo:
  ld de,(PS)
  push hl
@@ -242,12 +244,22 @@ ld_cnt:
  sub c
  sub c                ; the sum of all minus twice the checksum byte = 0 when the checksum is right
  ld e,2
- jr nz,ld_exit        ; wrong checksum
- ld (PE),hl           ; the end of the program = the place of the checksum byte
+ jr nz,ld_bad         ; wrong checksum
+ ld (hl),0xFF         ; the end marker of the program replaces the checksum byte
+ ld (PE),hl           ; the end of the program = the place of the marker
+ ld (PE2),hl
  ld e,1
  jr ld_exit
 ld_exit0:
  pop hl
+ ld a,e
+ cp 3
+ jr z,ld_exit         ; nothing was received: the memory is untouched
+ld_bad:
+ ld hl,(PS)           ; an error: the program area is left empty, as after NEW
+ ld (hl),0xFF
+ ld (PE),hl
+ ld (PE2),hl
 ld_exit:
  ld d,0
  ei
