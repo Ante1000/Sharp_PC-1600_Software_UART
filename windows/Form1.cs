@@ -74,7 +74,7 @@ namespace UartSlTest
 
             var gb = new GroupBox { Text = "Transmission mode", Left = 10, Top = 184, Width = 700, Height = 58, Anchor = TLR };
             radioSoft = new RadioButton { Text = "Software Serial", Left = 10, Checked = true };
-            radioRs = new RadioButton { Text = "RS-232", Left = 130 };
+            radioRs = new RadioButton { Text = "RS-232 - serial interface", Left = 130 };
             radioSio = new RadioButton { Text = "TTL-UART", Left = 300, Enabled = false };
             var lblBaud = new Label { Text = "Baud:", Left = 425, Top = 27, Width = 35 };
             comboBaud = new ComboBox { Left = 462, Top = 23, Width = 62, DropDownStyle = ComboBoxStyle.DropDownList };
