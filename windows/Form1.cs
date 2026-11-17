@@ -22,7 +22,8 @@ namespace UartSlTest
         volatile bool rs232;
 
         BannerPanel banner;
-        CheckBox chkPad, chkEof;
+        CheckBox chkEof;
+        Button btnView;
         ComboBox comboPorts, comboBaud, comboEol, comboFlow;
         CheckBox chkAuto;
         readonly WrapToolTip tips = new WrapToolTip { AutoPopDelay = 9000, InitialDelay = 400, ReshowDelay = 200, ShowAlways = true };
@@ -81,10 +82,10 @@ namespace UartSlTest
 
             var gb = new GroupBox { Text = "Transmission mode", Left = 10, Top = 184, Width = 700, Height = 58, Anchor = TLR };
             radioSoft = new RadioButton { Text = "Software Serial", Checked = true };
-            radioRs = new RadioButton { Text = "RS-232 serial I/F" };
+            radioRs = new RadioButton { Text = "RS-232 serial" };
             radioSio = new RadioButton { Text = "TTL-UART", Enabled = false };
             var lblBaud = new Label { Text = "Baud:" };
-            comboBaud = new ComboBox { Width = 50, DropDownStyle = ComboBoxStyle.DropDownList };
+            comboBaud = new ComboBox { Width = 62, DropDownStyle = ComboBoxStyle.DropDownList };
             foreach (int b in new[] { 300, 600, 1200, 2400, 4800, 9600, 19200 }) comboBaud.Items.Add(b.ToString());
             comboBaud.SelectedItem = "9600";
             var lblDelay = new Label { Text = "Delay:" };
@@ -145,12 +146,13 @@ namespace UartSlTest
 
             var gbFiles = new GroupBox { Text = "Files", Left = 10, Top = 366, Width = 565, Height = 176, Anchor = TLR };   // bottom edge = bottom of the Terminal button
             lstFiles = new ListBox { Left = 6, Top = 16, Width = 553, Height = 126, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
-            chkPad = new CheckBox { Text = "Add dummy last line", Left = 8, Top = 152, Width = 140 };
-            chkEof = new CheckBox { Text = "Add EOF marker", Left = 150, Top = 152, Width = 110, Checked = true };
-            chkAuto = new CheckBox { Text = "Auto tokenize", Left = 262, Top = 152, Width = 108, Checked = true };
+            chkEof = new CheckBox { Text = "Add EOF marker", Left = 110, Top = 152, Width = 110, Checked = true };
+            chkAuto = new CheckBox { Text = "Auto tokenize", Left = 230, Top = 152, Width = 108, Checked = true };
             btnAbort = Btn("Abort", Icons.Cross(), 468, 148, 90, 24, TR);
             btnConvert = Btn("Convert", Icons.File(), 374, 148, 90, 24, TR);
-            gbFiles.Controls.AddRange(new Control[] { lstFiles, chkPad, chkEof, chkAuto, btnConvert, btnAbort });
+            btnView = Btn("View", Icons.File(), 8, 148, 90, 24, TL);
+            btnView.Enabled = false;
+            gbFiles.Controls.AddRange(new Control[] { lstFiles, btnView, chkEof, chkAuto, btnConvert, btnAbort });
             btnSend = Btn("Send selected", Icons.Plane(), 585, 366, 125, 32, TR);
             btnSendOther = Btn("Send file...", Icons.File(), 585, 402, 125, 32, TR);
             btnRefreshFiles = Btn("Refresh list", Icons.Refresh(), 585, 438, 125, 32, TR);
@@ -219,6 +221,8 @@ namespace UartSlTest
             btnTerminal.Click += delegate { OpenTerminal(); };
             btnAbort.Click += delegate { Abort(); };
             btnConvert.Click += delegate { ConvertSelected(); };
+            btnView.Click += delegate { ViewSelected(); };
+            lstFiles.SelectedIndexChanged += delegate { btnView.Enabled = lstFiles.SelectedItem != null; };
             comboFlow.SelectedIndexChanged += delegate { ApplyFlow(); };
             btnLocations.Click += delegate { EditLocations(); };
             btnDelete.Click += delegate { DeleteSelected(); };
@@ -262,7 +266,7 @@ namespace UartSlTest
             tips.SetToolTip(btnRefreshFiles, "Re-read the folder and refresh the file list.");
             tips.SetToolTip(btnTerminal, "Open a terminal window (like TeraTerm): typed characters are sent, received data is shown. Text modes only.");
             tips.SetToolTip(comboEol, "Line end sent after every line of a text file: CR, CR+LF (TeraTerm style) or LF.");
-            tips.SetToolTip(chkPad, "Text modes: after the file, one extra line \"65279 REM\" is sent. Normally not needed when the end-of-file marker is sent; use it only if the Sharp still loses the last line.");
+            tips.SetToolTip(btnView, "Show the contents of the selected file (BASIC text; program images are shown as BASIC).");
             tips.SetToolTip(chkEof, "Add the end-of-file marker. Text modes: after the file (and the dummy line) send the end-of-file character 1Ah (Ctrl-Z) so that the Sharp finishes the reception (1Ah is the end-of-file code of an ASCII file). Switch it off if the Sharp reports an error.");
             tips.SetToolTip(btnAbort, "Abort the transmission at once: stops sending the file and discards data waiting to be sent or received.");
             tips.SetToolTip(btnConvert, "Convert the selected file: program image (.sl16 / .img) to BASIC text (.bas), or BASIC text to a program image (PC-1600: .sl16, PC-1500: .img).");
@@ -284,7 +288,7 @@ namespace UartSlTest
             bool p1500 = radio1500.Checked;
             radioSoft.Enabled = radioRs.Enabled = !other;
             radioSio.Enabled = other;
-            radioRs.Text = "RS-232 serial I/F";
+            radioRs.Text = "RS-232 serial";
             if (other) radioSio.Checked = true;
             else if (radioSio.Checked) radioSoft.Checked = true;
             banner.ModelName = other ? "Sharp with 15-pin connector" : p1500 ? "Sharp PC-1500" : "Sharp PC-1600";
@@ -404,7 +408,7 @@ namespace UartSlTest
         void UpdateMode()
         {
             rs232 = radioRs.Checked || radioSio.Checked;
-            comboBaud.Enabled = numDelay.Enabled = btnTerminal.Enabled = comboEol.Enabled = comboFlow.Enabled = chkPad.Enabled = chkEof.Enabled = rs232;
+            comboBaud.Enabled = numDelay.Enabled = btnTerminal.Enabled = comboEol.Enabled = comboFlow.Enabled = chkEof.Enabled = rs232;
             chkAuto.Enabled = !rs232;
             ApplyFlow();
             // greyed-out combo still shows the real speed of the mode: software serial = 19200 (PC-1600) or 9600 (PC-1500)
@@ -456,6 +460,7 @@ namespace UartSlTest
                 }
             }
             catch (Exception ex) { Log("List error: " + ex.Message); }
+            if (btnView != null) btnView.Enabled = lstFiles.SelectedItem != null;
         }
 
         void TogglePort()
@@ -658,6 +663,51 @@ namespace UartSlTest
             catch (Exception ex) { Log("Conversion error: " + ex.Message); }
         }
 
+        // preview of the selected file: text as it is, program images as BASIC text, anything else as a hex dump
+        void ViewSelected()
+        {
+            if (lstFiles.SelectedItem == null) return;
+            string name = (string)lstFiles.SelectedItem;
+            try
+            {
+                string path = Path.Combine(txtDir.Text, name);
+                byte[] data = File.ReadAllBytes(path);
+                string ext = Path.GetExtension(path).ToLowerInvariant();
+                string text, problem;
+                if (ext == ".sl16" || ext == ".img")
+                {
+                    text = Pc1600Basic.Detokenize(data, ext == ".img", out problem);
+                    if (problem != null) text += "\r\n[" + problem + "]";
+                }
+                else
+                {
+                    int ctl = 0;
+                    foreach (byte b in data) if (b < 9 || (b > 13 && b < 32 && b != 26) ) ctl++;
+                    if (ctl > data.Length / 20) text = HexDump(data);
+                    else text = Encoding.GetEncoding(28591).GetString(data).Replace("\r\n", "\n").Replace("\r", "\n").Replace("\n", "\r\n").Replace("\u001A", "");
+                }
+                if (text.Length > 300000) text = text.Substring(0, 300000) + "\r\n[... cut]";
+                new PreviewForm(name + " (" + data.Length + " B)", text).Show(this);
+            }
+            catch (Exception ex) { Log("View error: " + ex.Message); }
+        }
+
+        static string HexDump(byte[] d)
+        {
+            var sb = new StringBuilder();
+            int n = Math.Min(d.Length, 16384);
+            for (int i = 0; i < n; i += 16)
+            {
+                sb.Append(i.ToString("X4")).Append("  ");
+                for (int j = 0; j < 16; j++) sb.Append(i + j < n ? d[i + j].ToString("X2") + " " : "   ");
+                sb.Append(" ");
+                for (int j = 0; j < 16 && i + j < n; j++) sb.Append(d[i + j] >= 32 && d[i + j] < 127 ? (char)d[i + j] : '.');
+                sb.Append("\r\n");
+            }
+            if (d.Length > n) sb.Append("[... cut]");
+            return sb.ToString();
+        }
+
         void DeleteSelected()
         {
             if (lstFiles.SelectedItem == null) { Log("Select a file in the list."); return; }
@@ -713,7 +763,7 @@ namespace UartSlTest
             catch (Exception ex) { Log("Read error: " + ex.Message); return; }
             bool text = rs232;
             int delay = (int)numDelay.Value;
-            bool pad = chkPad.Checked, eof = chkEof.Checked;
+            bool eof = chkEof.Checked;
             bool dsrFlow = rs232 && comboFlow.SelectedIndex == 3;
             int eolIdx = comboEol.SelectedIndex;
             byte[] eol = eolIdx == 1 ? new byte[] { 13, 10 } : eolIdx == 2 ? new byte[] { 10 } : new byte[] { 13 };
@@ -790,13 +840,6 @@ namespace UartSlTest
                         }
                     }
                     if (abortRequested) return;
-                    if (text && pad)
-                    {
-                        // sacrificial last line: the Sharp does not keep the last line it receives
-                        var dummy = new List<byte>(Encoding.ASCII.GetBytes("65279 REM"));
-                        dummy.AddRange(eol);
-                        p.Write(dummy.ToArray(), 0, dummy.Count);
-                    }
                     if (text && eof) p.Write(new byte[] { 0x1A }, 0, 1);
                     while (p.BytesToWrite > 0) System.Threading.Thread.Sleep(10);
                     report(100);
@@ -1619,6 +1662,23 @@ namespace UartSlTest
             Controls.AddRange(new Control[] { del, cancel });
             AcceptButton = cancel;      // Enter = the safe choice
             CancelButton = cancel;
+        }
+    }
+
+    // Preview window (read only)
+    public class PreviewForm : Form
+    {
+        public PreviewForm(string title, string text)
+        {
+            Text = title;
+            ClientSize = new Size(640, 460);
+            StartPosition = FormStartPosition.CenterParent;
+            try { Icon = Icons.AppIcon(); } catch { }
+            Controls.Add(new TextBox
+            {
+                Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, WordWrap = false,
+                Font = new Font("Consolas", 9.5F), Text = text, BackColor = Color.White, SelectionStart = 0
+            });
         }
     }
 }
