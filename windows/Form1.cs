@@ -103,10 +103,10 @@ namespace UartSlTest
             var lblDir = new Label { Text = "Folder:", Left = 10, Top = 256, Width = 50 };
             txtDir = new TextBox
             {
-                Left = 65, Top = 252, Width = 391, Anchor = TLR,
+                Left = 65, Top = 252, Width = 385, Anchor = TLR,
                 Text = locs[1]
             };
-            btnLocations = Btn("Paths", Icons.Folder(), 462, 249, 70, 28, TR);
+            btnLocations = Btn("Folders", Icons.Folder(), 456, 249, 76, 28, TR);
             btnBrowse = Btn("Browse...", Icons.Folder(), 536, 249, 88, 28, TR);
             btnOpenDir = Btn("Open", Icons.Folder(), 628, 249, 82, 28, TR);
 
