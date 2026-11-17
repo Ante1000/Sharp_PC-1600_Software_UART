@@ -115,14 +115,15 @@ namespace UartSlTest
         public static Bitmap Folder() { return Make((g, p, b) => { g.FillRectangle(b, 2, 6, 16, 11); g.FillRectangle(b, 2, 4, 7, 3); }); }
         public static Bitmap Plane() { return Make((g, p, b) => { g.FillPolygon(b, new[] { new Point(2, 10), new Point(18, 3), new Point(13, 17), new Point(10, 12) }); }); }
         public static Bitmap File() { return Make((g, p, b) => { g.DrawRectangle(p, 5, 2, 10, 16); g.DrawLine(p, 8, 8, 12, 8); g.DrawLine(p, 8, 12, 12, 12); }); }
-        // application icon: shooting star (yellow star head, curved light-blue forked tail) on a navy sky
-        public static Icon AppIcon()
+        // shooting star (yellow star head, curved light-blue forked tail) on a navy sky, drawn at any size
+        public static Bitmap Comet(int size)
         {
-            using (var bmp = new Bitmap(32, 32))
+            var bmp = new Bitmap(size, size);
             using (var g = Graphics.FromImage(bmp))
             {
                 g.SmoothingMode = SmoothingMode.AntiAlias;
                 g.Clear(Color.Transparent);
+                g.ScaleTransform(size / 32F, size / 32F);
                 using (var b = new SolidBrush(Color.FromArgb(18, 40, 80))) g.FillEllipse(b, 0, 0, 31, 31);
                 using (var b = new SolidBrush(Color.White)) { g.FillRectangle(b, 5, 22, 1, 1); g.FillRectangle(b, 24, 5, 1, 1); g.FillRectangle(b, 12, 26, 1, 1); }
 
@@ -144,8 +145,14 @@ namespace UartSlTest
                     star[i] = new PointF((float)(23 + r * Math.Cos(ang)), (float)(22 + r * Math.Sin(ang)));
                 }
                 using (var b = new SolidBrush(Color.FromArgb(255, 226, 100))) g.FillPolygon(b, star);
-                return Icon.FromHandle(bmp.GetHicon());
             }
+            return bmp;
+        }
+
+        // application icon (window title bar and taskbar)
+        public static Icon AppIcon()
+        {
+            using (var bmp = Comet(32)) return Icon.FromHandle(bmp.GetHicon());
         }
     }
 
@@ -175,6 +182,7 @@ namespace UartSlTest
     public class BannerPanel : Panel
     {
         public bool PortOpen, Sending, Receiving;
+        Bitmap cometImg;
 
         public BannerPanel() { DoubleBuffered = true; ResizeRedraw = true; }
 
@@ -296,7 +304,12 @@ namespace UartSlTest
 
             // centre: title, arrows, LEDs
             int mid = Width / 2, ax1 = pcx + 70, ax2 = kx - 92;
-            using (var f = new Font("Segoe UI", 14F, FontStyle.Bold)) Text(g, "SerComet", f, Color.White, mid, top - 4);
+            using (var f = new Font("Segoe UI", 14F, FontStyle.Bold))
+            {
+                Text(g, "SerComet", f, Color.White, mid, top - 4);
+                if (cometImg == null) cometImg = Icons.Comet(28);
+                g.DrawImage(cometImg, mid - g.MeasureString("SerComet", f).Width / 2 - 32, top - 6);
+            }
             Arrow(g, ax1, ax2, top + 44, true, Sending);
             Arrow(g, ax1, ax2, top + 74, false, Receiving);
             Color ok = PortOpen ? Color.FromArgb(70, 220, 90) : Color.FromArgb(90, 90, 100);
@@ -404,13 +417,15 @@ namespace UartSlTest
 
             // title row: everything else moves down by one row (40 px)
             foreach (Control c in Controls) c.Top += 40;
+            Controls.Add(new PictureBox { Image = Icons.Comet(32), SizeMode = PictureBoxSizeMode.AutoSize, Left = 10, Top = 4 });
             Controls.Add(new Label
             {
                 Text = "FILE TRANSFER TOOL FOR PC AND SHARP POCKET COMPUTERS",
-                Left = 10, Top = 8, Width = 700, Height = 26, Anchor = TLR,
-                TextAlign = ContentAlignment.MiddleCenter,
+                Left = 50, Top = 8, Width = 660, Height = 26, Anchor = TLR,
+                TextAlign = ContentAlignment.MiddleLeft,
                 Font = new Font("Segoe UI", 11F, FontStyle.Bold), ForeColor = Color.FromArgb(30, 70, 120)
             });
+
 
             btnRefresh.Click += delegate { RefreshPorts(); };
             btnOpen.Click += delegate { TogglePort(); };
