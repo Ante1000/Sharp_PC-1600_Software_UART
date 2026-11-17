@@ -132,6 +132,28 @@ namespace UartSlTest
         }
     }
 
+    // Small status indicator: green LED + "Open" / dark (off) LED + "Closed"
+    public class LedLabel : Control
+    {
+        bool open;
+        public bool IsOpen { get { return open; } set { open = value; Invalidate(); } }
+
+        public LedLabel() { DoubleBuffered = true; }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            var r = new Rectangle(4, (Height - 16) / 2, 16, 16);
+            using (var b = new SolidBrush(open ? Color.FromArgb(60, 225, 90) : Color.FromArgb(15, 15, 15))) g.FillEllipse(b, r);
+            using (var p = new Pen(open ? Color.FromArgb(20, 120, 40) : Color.FromArgb(110, 110, 110), 1.5f)) g.DrawEllipse(p, r);
+            if (open) using (var b = new SolidBrush(Color.FromArgb(200, 255, 210))) g.FillEllipse(b, 8, r.Top + 3, 4, 4);   // highlight
+            using (var f = new Font("Segoe UI", 9F, FontStyle.Bold))
+            using (var b = new SolidBrush(open ? Color.FromArgb(20, 120, 40) : Color.FromArgb(60, 60, 60)))
+                g.DrawString(open ? "Open" : "Closed", f, b, 26, (Height - 16) / 2);
+        }
+    }
+
     // Banner: PC <-> PC-1600
     public class BannerPanel : Panel
     {
@@ -255,7 +277,9 @@ namespace UartSlTest
         Button btnRefresh, btnOpen, btnBrowse, btnOpenDir, btnSend, btnSendOther, btnRefreshFiles;
         TextBox txtDir, txtLog;
         ListBox lstFiles;
-        Label lblStatus, lblHint;
+        Label lblHint;
+        LedLabel led;
+        RadioButton radio1500, radio1600;
         RadioButton radioSoft, radioRs;
         NumericUpDown numDelay;
         Timer timer;
@@ -290,11 +314,11 @@ namespace UartSlTest
             comboPorts = new ComboBox { Left = 55, Top = 12, Width = 100, DropDownStyle = ComboBoxStyle.DropDownList };
             btnRefresh = Btn("Refresh", Icons.Refresh(), 165, 9, 100, 28, TL);
             btnOpen = Btn("Open port", Icons.Plug(), 275, 9, 130, 28, TL);
-            lblStatus = new Label
-            {
-                Text = "Port closed", Left = 470, Top = 11, Width = 240, Height = 26, Anchor = TR,
-                TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.White, BackColor = Color.FromArgb(170, 50, 50)
-            };
+            led = new LedLabel { Left = 415, Top = 11, Width = 90, Height = 26 };
+            var gbTarget = new GroupBox { Text = "Target computer", Left = 520, Top = 0, Width = 190, Height = 42, Anchor = TR };
+            radio1500 = new RadioButton { Text = "PC-1500", Left = 10, Top = 16, Width = 75, Enabled = false };   // not available yet
+            radio1600 = new RadioButton { Text = "PC-1600", Left = 100, Top = 16, Width = 80, Checked = true };
+            gbTarget.Controls.AddRange(new Control[] { radio1500, radio1600 });
 
             banner = new BannerPanel { Left = 10, Top = 46, Width = 700, Height = 132, Anchor = TLR };
 
@@ -332,7 +356,7 @@ namespace UartSlTest
                 Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
             };
 
-            Controls.AddRange(new Control[] { lblPort, comboPorts, btnRefresh, btnOpen, lblStatus, banner, gb,
+            Controls.AddRange(new Control[] { lblPort, comboPorts, btnRefresh, btnOpen, led, gbTarget, banner, gb,
                 lblDir, txtDir, btnBrowse, btnOpenDir, lblHint, lstFiles, btnSend, btnSendOther, btnRefreshFiles, txtLog });
 
             btnRefresh.Click += delegate { RefreshPorts(); };
@@ -396,8 +420,7 @@ namespace UartSlTest
         {
             banner.PortOpen = open;
             banner.Invalidate();
-            lblStatus.Text = open ? port.PortName + " open, " + port.BaudRate + " 8N1" : "Port closed";
-            lblStatus.BackColor = open ? Color.FromArgb(30, 140, 60) : Color.FromArgb(170, 50, 50);
+            led.IsOpen = open;
         }
 
         void Log(string s)
@@ -459,8 +482,7 @@ namespace UartSlTest
             btnOpen.Image = Icons.Plug();
             banner.PortOpen = false;
             banner.Invalidate();
-            lblStatus.Text = "Port closed";
-            lblStatus.BackColor = Color.FromArgb(170, 50, 50);
+            led.IsOpen = false;
         }
 
         void OnData(object sender, SerialDataReceivedEventArgs e)
