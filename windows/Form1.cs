@@ -74,8 +74,8 @@ namespace UartSlTest
 
             var gb = new GroupBox { Text = "Transmission mode", Left = 10, Top = 184, Width = 700, Height = 58, Anchor = TLR };
             radioSoft = new RadioButton { Text = "Software Serial", Left = 10, Checked = true };
-            radioRs = new RadioButton { Text = "RS-232 (serial port, text)", Left = 130 };
-            radioSio = new RadioButton { Text = "TTL-UART (text)", Left = 300, Enabled = false };
+            radioRs = new RadioButton { Text = "RS-232", Left = 130 };
+            radioSio = new RadioButton { Text = "TTL-UART", Left = 300, Enabled = false };
             var lblBaud = new Label { Text = "Baud:", Left = 425, Top = 27, Width = 35 };
             comboBaud = new ComboBox { Left = 462, Top = 23, Width = 62, DropDownStyle = ComboBoxStyle.DropDownList };
             foreach (int b in new[] { 300, 600, 1200, 2400, 4800, 9600, 19200 }) comboBaud.Items.Add(b.ToString());
@@ -187,10 +187,10 @@ namespace UartSlTest
             bool p1500 = radio1500.Checked;
             radioSoft.Enabled = radioRs.Enabled = !other;
             radioSio.Enabled = other;
-            radioRs.Text = p1500 ? "RS-232 - CE-158(X)" : "RS-232 (serial port, text)";
+            radioRs.Text = p1500 ? "RS-232 - CE-158(X)" : "RS-232";
             if (other) radioSio.Checked = true;
             else if (radioSio.Checked) radioSoft.Checked = true;
-            banner.ModelName = other ? "Other Sharp" : p1500 ? "Sharp PC-1500" : "Sharp PC-1600";
+            banner.ModelName = other ? "Sharp with 15-pin connector" : p1500 ? "Sharp PC-1500" : "Sharp PC-1600";
             banner.Invalidate();
             SetDefaultDir(other ? "PC_15-pin" : p1500 ? "PC1500" : "PC1600");
             UpdateMode();
@@ -199,14 +199,14 @@ namespace UartSlTest
         string HintText()
         {
             if (radioSio.Checked)
-                return "Compatible models: PC-1350, PC-1360, PC-1450-80, PC-E500 ... PC-E650 series, PC-U6000, PC-2500.\r\n15-pin connector, TTL-UART SIO through a USB/COM adapter (like TeraTerm). RECEIVE: send the program as text, the file is saved after 3 s of silence. SEND: start receiving on the pocket computer, then press Send.";
+                return "Compatible models: PC-1350, PC-1360, PC-1450-80, PC-E500 ... PC-E650 series, PC-U6000, PC-2500.\r\n15-pin connector, TTL-UART SIO through a USB/COM adapter (like TeraTerm), text transfer (.bas files). RECEIVE: send the program as text, the file is saved after 3 s of silence. SEND: start receiving on the pocket computer, then press Send.";
             if (radio1500.Checked && radioRs.Checked)
-                return "PC-1500 with the CE-158(X) RS-232 interface (text, same baud rate on both sides). RECEIVE: the file is saved after 3 s of silence, named after the first REM line.\r\nSEND: start receiving on the PC-1500 first, then press Send. Lines are sent one by one with the delay set above.";
+                return "PC-1500 with the CE-158(X) RS-232 interface, text transfer (.bas files), same baud rate on both sides. RECEIVE: the file is saved after 3 s of silence, named after the first REM line.\r\nSEND: start receiving on the PC-1500 first, then press Send. Lines are sent one by one with the delay set above.";
             if (radio1500.Checked)
                 return "PC-1500 software serial (Saver/Loader for the PC-1500) is not implemented yet. Use RS-232 - CE-158(X).";
             if (radioRs.Checked)
-                return "RECEIVE: send the program as text from the PC-1600 through its RS-232 port (same baud rate on both sides). The file is saved after 3 s of silence, named after the first REM line.\r\nSEND: start receiving on the PC-1600 first, then press Send. Lines are sent one by one with the delay set above.";
-            return "RECEIVE: on the PC-1600 run SAVE (CALL addr,X). The file is saved automatically, named after the first REM.\r\nSEND: run LOAD on the PC-1600 first (CALL addr+176,X), then press Send (30 s to start).";
+                return "RS-232 serial port of the PC-1600, text transfer (.bas files), same baud rate on both sides. RECEIVE: send the program as text from the PC-1600. The file is saved after 3 s of silence, named after the first REM line.\r\nSEND: start receiving on the PC-1600 first, then press Send. Lines are sent one by one with the delay set above.";
+            return "Software serial: 19200 8N1, binary transfer (.sl16 files). RECEIVE: on the PC-1600 run SAVE (CALL addr,X). The file is saved automatically, named after the first REM.\r\nSEND: run LOAD on the PC-1600 first (CALL addr+176,X), then press Send (30 s to start).";
         }
 
         void SetDefaultDir(string sub)
