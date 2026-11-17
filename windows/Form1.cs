@@ -107,21 +107,29 @@ namespace UartSlTest
             lblHint = new Label { Left = 8, Top = 14, Width = 684, Height = 67, Anchor = TLR };
             gbInfo.Controls.Add(lblHint);
 
-            lstFiles = new ListBox { Left = 10, Top = 366, Width = 565, Height = 110, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
+            var gbFiles = new GroupBox { Text = "Files", Left = 10, Top = 366, Width = 565, Height = 130, Anchor = TLR };   // bottom edge = bottom of the Terminal button
+            lstFiles = new ListBox { Left = 6, Top = 16, Width = 553, Height = 108, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
+            gbFiles.Controls.Add(lstFiles);
             btnSend = Btn("Send selected", Icons.Plane(), 585, 366, 125, 30, TR);
             btnSendOther = Btn("Send file...", Icons.File(), 585, 400, 125, 30, TR);
             btnRefreshFiles = Btn("Refresh list", Icons.Refresh(), 585, 434, 125, 30, TR);
             btnTerminal = Btn("Terminal", Icons.Terminal(), 585, 468, 125, 28, TR);
 
+            var gbLog = new GroupBox
+            {
+                Text = "Log", Left = 10, Top = 500, Width = 700, Height = 118,
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
+            };
+            gbLog.Controls.Add(txtLog);
             txtLog = new TextBox
             {
-                Left = 10, Top = 502, Width = 700, Height = 114, Multiline = true,
+                Left = 6, Top = 14, Width = 688, Height = 100, Multiline = true,
                 ScrollBars = ScrollBars.Vertical, ReadOnly = true, Font = new Font("Consolas", 9F),
                 Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
             };
 
             Controls.AddRange(new Control[] { lblPort, comboPorts, btnRefresh, btnOpen, led, gbTarget, banner, gb,
-                lblDir, txtDir, btnBrowse, btnOpenDir, gbInfo, lstFiles, btnSend, btnSendOther, btnRefreshFiles, btnTerminal, txtLog });
+                lblDir, txtDir, btnBrowse, btnOpenDir, gbInfo, gbFiles, btnSend, btnSendOther, btnRefreshFiles, btnTerminal, gbLog });
 
             // title row: everything else moves down by one row (40 px)
             foreach (Control c in Controls) c.Top += 40;
