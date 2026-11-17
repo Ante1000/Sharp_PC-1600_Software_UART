@@ -60,7 +60,7 @@ namespace UartSlTest
             const AnchorStyles TR = AnchorStyles.Top | AnchorStyles.Right;
             const AnchorStyles TLR = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
 
-            var lblPort = new Label { Text = "Port:", Left = 22, Top = 16, Width = 40 };
+            var lblPort = new Label { Text = "Port:", Left = 20, Top = 16, Width = 32 };
             comboPorts = new ComboBox { Left = 55, Top = 12, Width = 100, DropDownStyle = ComboBoxStyle.DropDownList };
             btnRefresh = Btn("Refresh", Icons.Refresh(), 165, 9, 85, 28, TL);
             btnOpen = Btn("Open port", Icons.Plug(), 258, 9, 85, 28, TL);
@@ -177,7 +177,7 @@ namespace UartSlTest
                 }
             };
 
-            tips.SetToolTip(comboPorts, "Select a COM port, or the virtual COM port created by a USB adapter (FTDI) connected to the Sharp.");
+            tips.SetToolTip(comboPorts, "Select a COM port, or the virtual COM port created by a USB adapter (FTDI)");
             tips.SetToolTip(btnRefresh, "Re-scan the list of available COM ports.");
             tips.SetToolTip(btnOpen, "Open or close the selected COM port.");
             tips.SetToolTip(led, "Port status: green = open, dark = closed.");
