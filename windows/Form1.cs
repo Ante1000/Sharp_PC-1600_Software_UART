@@ -118,9 +118,9 @@ namespace UartSlTest
             var gbFiles = new GroupBox { Text = "Files", Left = 10, Top = 366, Width = 565, Height = 130, Anchor = TLR };   // bottom edge = bottom of the Terminal button
             lstFiles = new ListBox { Left = 6, Top = 16, Width = 553, Height = 88, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
             chkPad = new CheckBox { Text = "Add dummy last line", Left = 8, Top = 106, Width = 140 };
-            chkEof = new CheckBox { Text = "Send end-of-file marker (Ctrl-Z)", Left = 155, Top = 106, Width = 228, Checked = true };
-            btnAbort = Btn("Abort", Icons.Cross(), 462, 102, 90, 24, TR);
-            btnConvert = Btn("Convert", Icons.File(), 388, 102, 70, 24, TR);
+            chkEof = new CheckBox { Text = "Send end-of-file marker (Ctrl-Z)", Left = 150, Top = 106, Width = 220, Checked = true };
+            btnAbort = Btn("Abort", Icons.Cross(), 468, 102, 90, 24, TR);
+            btnConvert = Btn("Convert", Icons.File(), 374, 102, 90, 24, TR);
             gbFiles.Controls.AddRange(new Control[] { lstFiles, chkPad, chkEof, btnConvert, btnAbort });
             btnSend = Btn("Send selected", Icons.Plane(), 585, 366, 125, 30, TR);
             btnSendOther = Btn("Send file...", Icons.File(), 585, 400, 125, 30, TR);
