@@ -150,13 +150,13 @@ namespace UartSlTest
             {
                 using (var d = new FolderBrowserDialog())
                 {
-                    d.SelectedPath = txtDir.Text;
-                    if (d.ShowDialog() == DialogResult.OK) { txtDir.Text = d.SelectedPath; RefreshFiles(); }
+                    d.SelectedPath = txtDir.;
+                    if (d.ShowDialog() == DialogResult.OK) { txtDir. = d.SelectedPath; RefreshFiles(); }
                 }
             };
             btnOpenDir.Click += delegate
             {
-                try { Directory.CreateDirectory(txtDir.Text); System.Diagnostics.Process.Start(txtDir.Text); }
+                try { Directory.CreateDirectory(txtDir.); System.Diagnostics.Process.Start(txtDir.Text); }
                 catch (Exception ex) { Log("Error: " + ex.Message); }
             };
             btnRefreshFiles.Click += delegate { RefreshFiles(); };
@@ -187,7 +187,7 @@ namespace UartSlTest
             bool p1500 = radio1500.Checked;
             radioSoft.Enabled = radioRs.Enabled = !other;
             radioSio.Enabled = other;
-            radioRs.Text = p1500 ? "RS-232 - CE-158(X)" : "RS-232 (serial port, text)";
+            radioRs.Text = p1500 ? "RS-232 - serial interface" : "RS-232 (serial port, see text)";
             if (other) radioSio.Checked = true;
             else if (radioSio.Checked) radioSoft.Checked = true;
             banner.ModelName = other ? "Other Sharp" : p1500 ? "Sharp PC-1500" : "Sharp PC-1600";
@@ -199,7 +199,7 @@ namespace UartSlTest
         string HintText()
         {
             if (radioSio.Checked)
-                return "Compatible models: PC-1350, PC-1360, PC-1450-80, PC-E500 ... PC-E650 series, PC-U6000, PC-2500.\r\n15-pin connector, TTL-UART SIO through a USB/COM adapter (like TeraTerm). RECEIVE: send the program as text, the file is saved after 3 s of silence. SEND: start receiving on the pocket computer, then press Send.";
+                return "Compatible models: PC-1350, PC-1360, PC-1450..90, PC-E500..650 series, PC-U6000, PC-2500.\r\n15-pin connector, TTL-UART SIO through a USB/COM adapter (like TeraTerm). RECEIVE: send the program as text, the file is saved after 3 s of silence. SEND: start receiving on the pocket computer, then press Send.";
             if (radio1500.Checked && radioRs.Checked)
                 return "PC-1500 with the CE-158(X) RS-232 interface (text, same baud rate on both sides). RECEIVE: the file is saved after 3 s of silence, named after the first REM line.\r\nSEND: start receiving on the PC-1500 first, then press Send. Lines are sent one by one with the delay set above.";
             if (radio1500.Checked)
