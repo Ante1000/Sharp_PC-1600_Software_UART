@@ -23,7 +23,7 @@ namespace UartSlTest
 
         BannerPanel banner;
         CheckBox chkPad, chkEof;
-        ComboBox comboPorts, comboBaud, comboEol;
+        ComboBox comboPorts, comboBaud, comboEol, comboRecv;
         readonly ToolTip tips = new ToolTip { AutoPopDelay = 9000, InitialDelay = 400, ReshowDelay = 200, ShowAlways = true };
         TerminalForm term;
         Button btnTerminal, btnAbort;
@@ -100,9 +100,14 @@ namespace UartSlTest
             var lblDir = new Label { Text = "Folder:", Left = 10, Top = 256, Width = 50 };
             txtDir = new TextBox
             {
-                Left = 65, Top = 252, Width = 460, Anchor = TLR,
+                Left = 65, Top = 252, Width = 290, Anchor = TLR,
                 Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "PC1600")
             };
+            var lblRecv = new Label { Text = "Received file:", Left = 360, Top = 256, Width = 75 };
+            comboRecv = new ComboBox { Left = 436, Top = 252, Width = 90, DropDownStyle = ComboBoxStyle.DropDownList, Anchor = TR };
+            comboRecv.Items.AddRange(new object[] { "Image", "BASIC" });
+            comboRecv.SelectedIndex = 0;
+            lblRecv.Anchor = TR;
             btnBrowse = Btn("Browse...", Icons.Folder(), 530, 249, 92, 28, TR);
             btnOpenDir = Btn("Open", Icons.Folder(), 628, 249, 82, 28, TR);
 
@@ -135,7 +140,7 @@ namespace UartSlTest
             gbLog.Controls.Add(txtLog);
 
             Controls.AddRange(new Control[] { lblPort, comboPorts, btnRefresh, btnOpen, led, gbTarget, banner, gb,
-                lblDir, txtDir, btnBrowse, btnOpenDir, gbInfo, gbFiles, btnSend, btnSendOther, btnRefreshFiles, btnTerminal, gbLog });
+                lblDir, txtDir, lblRecv, comboRecv, btnBrowse, btnOpenDir, gbInfo, gbFiles, btnSend, btnSendOther, btnRefreshFiles, btnTerminal, gbLog });
 
             // title row: everything else moves down by one row (40 px)
             foreach (Control c in Controls) c.Top += 40;
@@ -191,7 +196,7 @@ namespace UartSlTest
             {
                 using (var d = new OpenFileDialog())
                 {
-                    d.Filter = rs232 ? "BASIC text (*.bas;*.txt)|*.bas;*.txt|All files|*.*" : "PC-1600 files (*.sl16)|*.sl16|All files|*.*";
+                    d.Filter = rs232 ? "BASIC text (*.bas;*.txt)|*.bas;*.txt|All files|*.*" : "PC-1600 files (*.sl16;*.bas;*.txt)|*.sl16;*.bas;*.txt|All files|*.*";
                     if (d.ShowDialog() == DialogResult.OK) SendFile(d.FileName);
                 }
             };
@@ -224,6 +229,7 @@ namespace UartSlTest
             tips.SetToolTip(chkPad, "Text modes: after the file, one extra line \"65279 REM\" is sent. Normally not needed when the end-of-file marker is sent; use it only if the Sharp still loses the last line.");
             tips.SetToolTip(chkEof, "Text modes: after the file (and the dummy line) send the end-of-file character 1Ah (Ctrl-Z) so that the Sharp finishes the reception (1Ah is the end-of-file code of an ASCII file). Switch it off if the Sharp reports an error.");
             tips.SetToolTip(btnAbort, "Abort the transmission at once: stops sending the file and discards data waiting to be sent or received.");
+            tips.SetToolTip(comboRecv, "Software Serial: what to do with a program received from the Sharp. Image = raw program image (.sl16, can be sent back as it is). BASIC = convert to a readable BASIC text file (.bas).");
             tips.SetToolTip(txtLog, "Log of transfers and messages.");
 
             timer = new Timer { Interval = 100 };
@@ -306,6 +312,7 @@ namespace UartSlTest
         {
             rs232 = radioRs.Checked || radioSio.Checked;
             comboBaud.Enabled = numDelay.Enabled = btnTerminal.Enabled = comboEol.Enabled = chkPad.Enabled = chkEof.Enabled = rs232;
+            comboRecv.Enabled = !rs232;
             ApplyFlow();
             // greyed-out combo still shows the real speed of the mode: software serial = 19200 (PC-1600) or 9600 (PC-1500)
             comboBaud.SelectedItem = rs232 ? savedBaud : (radio1500.Checked ? "9600" : "19200");
@@ -347,8 +354,13 @@ namespace UartSlTest
             try
             {
                 if (Directory.Exists(txtDir.Text))
-                    foreach (string f in Directory.GetFiles(txtDir.Text, "*" + Ext))
-                        lstFiles.Items.Add(Path.GetFileName(f));
+                {
+                    var found = new List<string>();
+                    foreach (string pat in rs232 ? new[] { "*.bas", "*.txt" } : new[] { "*.sl16", "*.bas", "*.txt" })
+                        foreach (string f in Directory.GetFiles(txtDir.Text, pat)) found.Add(Path.GetFileName(f));
+                    found.Sort(StringComparer.OrdinalIgnoreCase);
+                    lstFiles.Items.AddRange(found.ToArray());
+                }
             }
             catch (Exception ex) { Log("List error: " + ex.Message); }
         }
@@ -473,6 +485,18 @@ namespace UartSlTest
                     string path = UniquePath(name, ".sl16");
                     File.WriteAllBytes(path, data);
                     Log("RECEIVED " + data.Length + " B, " + Sl16.CountLines(data) + " lines, checksum OK -> " + Path.GetFileName(path));
+                    if (comboRecv.SelectedIndex == 1)
+                    {
+                        if (radio1500.Checked) Log("Conversion to BASIC: the PC-1500 token table is not available yet; the image was saved.");
+                        else
+                        {
+                            string problem;
+                            string bas = Pc1600Basic.Detokenize(data, out problem);
+                            string bpath = UniquePath(name, ".bas");
+                            File.WriteAllBytes(bpath, Encoding.GetEncoding(28591).GetBytes(bas));
+                            Log("Converted the PC-1600 intermediate code to BASIC text -> " + Path.GetFileName(bpath) + (problem != null ? " (warning: " + problem + ")" : ""));
+                        }
+                    }
                     RefreshFiles();
                 }
                 else
@@ -532,6 +556,17 @@ namespace UartSlTest
             if (!text)
             {
                 string err;
+                if (!path.EndsWith(".sl16", StringComparison.OrdinalIgnoreCase))
+                {
+                    // BASIC text: convert to the intermediate code of the Sharp first
+                    if (radio1500.Checked) { Log("The PC-1500 token table is not available yet: cannot convert BASIC text."); return; }
+                    Log("Tokenizing to the PC-1600 intermediate code format...");
+                    string problem;
+                    byte[] tok = Pc1600Basic.Tokenize(Encoding.GetEncoding(28591).GetString(data), out problem);
+                    if (tok == null) { Log("Tokenizer error: " + problem); return; }
+                    data = tok;
+                    Log("Tokenized: " + Sl16.CountLines(data) + " lines, " + data.Length + " B (program image + checksum).");
+                }
                 if (!Sl16.Check(data, out err)) { Log("File rejected: " + err); return; }
             }
             abortRequested = false;
@@ -1015,7 +1050,7 @@ namespace UartSlTest
             MaximizeBox = MinimizeBox = false;
             ShowInTaskbar = false;
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(380, 300);
+            ClientSize = new Size(380, 352);
 
             Controls.Add(new PictureBox { Image = Icons.Comet(72), SizeMode = PictureBoxSizeMode.AutoSize, Left = (380 - 72) / 2, Top = 16 });
             AddLine("SerComet", 100, new Font("Segoe UI", 16F, FontStyle.Bold), Color.FromArgb(30, 70, 120));
@@ -1023,6 +1058,8 @@ namespace UartSlTest
             AddLine("Author: Alex F4VTS", 170, new Font("Segoe UI", 10F), Color.Black);
             AddLine("Copyright \u00A9 2026", 194, new Font("Segoe UI", 10F), Color.Black);
             AddLine("License: GNU General Public License v3.0", 218, new Font("Segoe UI", 10F), Color.Black);
+            AddLine("BASIC token tables: \"Das Systemhandbuch fuer den PC-1600\"", 266, new Font("Segoe UI", 8.5F), Color.Black);
+            AddLine("by David von Oheimb. Thank you!", 286, new Font("Segoe UI", 8.5F), Color.Black);
             var web = new LinkLabel { Text = "Web: github.com/Ante1000", Left = 0, Top = 242, Width = 380, Height = 20, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Segoe UI", 10F) };
             web.Links.Add(5, 19, "https://github.com/Ante1000");
             web.LinkClicked += delegate (object s, LinkLabelLinkClickedEventArgs e)
@@ -1032,7 +1069,7 @@ namespace UartSlTest
             Controls.Add(web);
             var tt = new ToolTip { AutoPopDelay = 9000, InitialDelay = 400, ShowAlways = true };
             tt.SetToolTip(web, "Open the project page in the browser.");
-            var ok = new Button { Text = "OK", Left = (380 - 80) / 2, Top = 268, Width = 80, DialogResult = DialogResult.OK };
+            var ok = new Button { Text = "OK", Left = (380 - 80) / 2, Top = 316, Width = 80, DialogResult = DialogResult.OK };
             Controls.Add(ok);
             AcceptButton = ok;
             tt.SetToolTip(ok, "Close this window.");
@@ -1041,6 +1078,230 @@ namespace UartSlTest
         void AddLine(string text, int top, Font font, Color color)
         {
             Controls.Add(new Label { Text = text, Left = 0, Top = top, Width = 380, Height = 24, TextAlign = ContentAlignment.MiddleCenter, Font = font, ForeColor = color });
+        }
+    }
+
+    // PC-1600 BASIC program <-> text. Written from scratch using the token tables of
+    // "Das Systemhandbuch fuer den PC-1600" by David von Oheimb (appendix 5, Tokentabelle) and checked against
+    // programs saved by a real PC-1600. Program format: [line no. hi, lo][length][tokens, text, 0D]..., end FFh.
+    // Tokens are two bytes (E3/E6/E7/E8/F0/F1/F2 + code); a line number constant is stored as 1Fh hi lo 00h.
+    public static class Pc1600Basic
+    {
+        static readonly object[] TokenList = new object[] {
+            "PAPER", 0xE381, "CSIZE", 0xE680, "GRAPH", 0xE681, "GLCURSOR", 0xE682, "SORGN", 0xE684, "ROTATE", 0xE685,
+            "TEXT", 0xE686, "RMT", 0xE7A9, "DEV$", 0xE857, "COM$", 0xE858, "INSTAT", 0xE859, "RINKEY$", 0xE85A,
+            "OUTSTAT", 0xE880, "SETCOM", 0xE882, "TERMINAL", 0xE883, "DTE", 0xE884, "TRANSMIT", 0xE885,
+            "SETDEV", 0xE886, "ERN", 0xF052, "ERL", 0xF053, "SPACE$", 0xF061, "CURSOR", 0xF084, "USING", 0xF085,
+            "WDTH", 0xF087, "CLS", 0xF088, "CLOAD", 0xF089, "MERGE", 0xF08F, "LIST", 0xF090, "INPUT", 0xF091,
+            "GCURSOR", 0xF093, "CSAVE", 0xF095, "PRINT", 0xF097, "FILES", 0xF098, "LINE", 0xF099, "PRESET", 0xF09A,
+            "PSET", 0xF09B, "GPRINT", 0xF09F, "LFILES", 0xF0A0, "PITCH", 0xF0A4, "LCURSOR", 0xF0A5, "FEED", 0xF0B0,
+            "CONSOLE", 0xF0B1, "CHAIN", 0xF0B2, "BREAK", 0xF0B3, "ZONE", 0xF0B4, "COLOR", 0xF0B5, "LF", 0xF0B6,
+            "LLINE", 0xF0B7, "LLIST", 0xF0B8, "LPRINT", 0xF0B9, "RLINE", 0xF0BA, "TAB", 0xF0BB, "TEST", 0xF0BC,
+            "AND", 0xF150, "OR", 0xF151, "MEM", 0xF158, "TIME", 0xF15B, "INKEY$", 0xF15C, "PI", 0xF15D,
+            "ASC", 0xF160, "STR$", 0xF161, "VAL", 0xF162, "CHR$", 0xF163, "LEN", 0xF164, "DEG", 0xF165,
+            "DMS", 0xF166, "STATUS", 0xF167, "POINT", 0xF168, "SQR", 0xF16B, "NOT", 0xF16D, "XPEEK#", 0xF16E,
+            "XPEEK", 0xF16F, "ABS", 0xF170, "INT", 0xF171, "RIGHT$", 0xF172, "ASN", 0xF173, "ACS", 0xF174,
+            "ATN", 0xF175, "LN", 0xF176, "LOG", 0xF177, "EXP", 0xF178, "SGN", 0xF179, "LEFT$", 0xF17A,
+            "MID$", 0xF17B, "RND", 0xF17C, "SIN", 0xF17D, "COS", 0xF17E, "TAN", 0xF17F, "AREAD", 0xF180,
+            "ARUN", 0xF181, "BEEP", 0xF182, "CONT", 0xF183, "GRAD", 0xF186, "CLEAR", 0xF187, "XCALL", 0xF18A,
+            "DIM", 0xF18B, "DEGREE", 0xF18C, "DATA", 0xF18D, "END", 0xF18E, "GOTO", 0xF192, "GOSUB", 0xF194,
+            "IF", 0xF196, "LET", 0xF198, "RETURN", 0xF199, "NEXT", 0xF19A, "NEW", 0xF19B, "ON", 0xF19C,
+            "OPN", 0xF19D, "OFF", 0xF19E, "XPOKE#", 0xF1A0, "XPOKE", 0xF1A1, "PAUSE", 0xF1A2, "RUN", 0xF1A4,
+            "FOR", 0xF1A5, "READ", 0xF1A6, "RESTORE", 0xF1A7, "RANDOM", 0xF1A8, "RADIAN", 0xF1AA, "REM", 0xF1AB,
+            "STOP", 0xF1AC, "STEP", 0xF1AD, "THEN", 0xF1AE, "TRON", 0xF1AF, "TROFF", 0xF1B0, "TO", 0xF1B1,
+            "WAIT", 0xF1B3, "ERROR", 0xF1B4, "LOCK", 0xF1B5, "UNLOCK", 0xF1B6, "EOF", 0xF221, "LOC", 0xF222,
+            "LOF", 0xF223, "DSKF", 0xF224, "MOD", 0xF250, "XOR", 0xF251, "RXD$", 0xF256, "DATE$", 0xF257,
+            "TIME$", 0xF258, "AIN", 0xF25A, "ALARM$", 0xF25C, "WAKE$", 0xF261, "ACNV$", 0xF262, "HEX$", 0xF265,
+            "INP", 0xF266, "INSTR", 0xF267, "PEEK", 0xF26D, "PEEK#", 0xF26E, "ADIN", 0xF280, "CALL", 0xF282,
+            "ELSE", 0xF283, "KBUFF$", 0xF284, "KEY", 0xF285, "KEYSTAT", 0xF286, "KILL", 0xF287, "MAXFILES", 0xF288,
+            "OUT", 0xF28A, "POWER", 0xF28B, "POKE", 0xF28C, "RESUME", 0xF28D, "RETI", 0xF28E, "BLOAD", 0xF290,
+            "BSAVE", 0xF291, "CLOSE", 0xF292, "COPY", 0xF293, "INIT", 0xF294, "LOAD", 0xF295, "OPEN", 0xF296,
+            "NAME", 0xF297, "SET", 0xF298, "SAVE", 0xF299, "PHONE", 0xF2A0, "SNDBRK", 0xF2A1, "SNDSTAT", 0xF2A2,
+            "COM", 0xF2A3, "RCVSTAT", 0xF2A4, "PCONSOLE", 0xF2B1, "MODE", 0xF2B3, "PZONE", 0xF2B4, "RENUM", 0xF2B5,
+            "AUTO", 0xF2B6, "ERASE", 0xF2B7, "PASS", 0xF2B8, "DELETE", 0xF2B9, "TITLE", 0xF2BA, "AOFF", 0xF2BC,
+            "AS", 0xF2BD, "OUTPUT", 0xF2BE, "APPEND", 0xF2BF,
+        };
+
+        static readonly Dictionary<int, string> byCode = new Dictionary<int, string>();
+        static readonly List<KeyValuePair<string, int>> byLength = new List<KeyValuePair<string, int>>();
+        // keywords after which a line number constant (binary form 1F hi lo 00) can follow
+        static readonly HashSet<string> LineKeywords = new HashSet<string> { "GOTO", "GOSUB", "THEN", "ELSE", "RESTORE", "RUN", "RESUME", "LIST", "LLIST", "DELETE", "RENUM", "AUTO" };
+
+        static Pc1600Basic()
+        {
+            for (int i = 0; i < TokenList.Length; i += 2)
+            {
+                string n = (string)TokenList[i];
+                int c = (int)TokenList[i + 1];
+                byCode[c] = n;
+                byLength.Add(new KeyValuePair<string, int>(n, c));
+            }
+            byLength.Sort((a, b) => b.Key.Length != a.Key.Length ? b.Key.Length.CompareTo(a.Key.Length) : string.CompareOrdinal(a.Key, b.Key));
+        }
+
+        // ---------------------------------------------------------------- program image -> text
+        // data: the program image; a trailing checksum byte (.sl16) is checked and removed, a trailing FFh is accepted
+        public static string Detokenize(byte[] data, out string problem)
+        {
+            problem = null;
+            int n = data.Length;
+            string err;
+            if (Sl16.Check(data, out err)) n--;                       // .sl16 = program + checksum
+            else if (n > 0 && data[n - 1] == 0xFF) n--;                // plain image with the end marker
+            var sb = new StringBuilder();
+            int p = 0;
+            while (p < n)
+            {
+                if (p + 3 > n) { problem = "truncated line at byte " + p; break; }
+                int no = data[p] * 256 + data[p + 1];
+                int len = data[p + 2];
+                if (len < 1 || p + 3 + len > n) { problem = "bad line length at byte " + p; break; }
+                sb.Append(no).Append(' ').Append(DetokenizeLine(data, p + 3, p + 3 + len)).Append("\r\n");
+                p += 3 + len;
+            }
+            return sb.ToString();
+        }
+
+        static string DetokenizeLine(byte[] d, int p, int end)
+        {
+            var sb = new StringBuilder();
+            bool inString = false;
+            while (p < end)
+            {
+                byte b = d[p];
+                if (b == 0x0D) break;
+                if (inString)
+                {
+                    sb.Append((char)b); p++;
+                    if (b == 0x22) inString = false;
+                    continue;
+                }
+                if (b == 0x22) { inString = true; sb.Append('"'); p++; continue; }
+                if (b == 0x1F && p + 3 < end + 1)                       // line number constant
+                {
+                    sb.Append(d[p + 1] * 256 + d[p + 2]);
+                    p += 3;
+                    if (p < end && d[p] == 0x00) p++;
+                    continue;
+                }
+                if (b >= 0xE0 && p + 1 < end)
+                {
+                    int code = b * 256 + d[p + 1];
+                    string name;
+                    if (!byCode.TryGetValue(code, out name)) name = "<" + code.ToString("X4") + ">";
+                    p += 2;
+                    // a space before the keyword when the previous character would run into it
+                    if (sb.Length > 0 && (char.IsLetterOrDigit(sb[sb.Length - 1]) || sb[sb.Length - 1] == ')' || sb[sb.Length - 1] == '$' || sb[sb.Length - 1] == '"' || sb[sb.Length - 1] == '#')) sb.Append(' ');
+                    sb.Append(name);
+                    if (name == "REM" || name == "DATA")
+                    {
+                        sb.Append(' ');
+                        while (p < end && d[p] != 0x0D) { sb.Append((char)d[p]); p++; }
+                        break;
+                    }
+                    // a space after the keyword when the next thing is a name, number, string or another keyword
+                    if (p < end)
+                    {
+                        byte nb = d[p];
+                        if (nb >= 0xE0 || nb == 0x1F || nb == 0x22 || char.IsLetterOrDigit((char)nb) || nb == 0x26) sb.Append(' ');
+                    }
+                    continue;
+                }
+                sb.Append((char)b); p++;
+            }
+            return sb.ToString();
+        }
+
+        // ---------------------------------------------------------------- text -> program image (.sl16)
+        public static byte[] Tokenize(string text, out string problem)
+        {
+            problem = null;
+            var lines = new SortedDictionary<int, byte[]>();
+            int ln = 0;
+            foreach (string raw in text.Split('\n'))
+            {
+                ln++;
+                string s = raw.TrimEnd('\r', ' ', '\t', (char)0x1A);
+                if (s.Trim().Length == 0) continue;
+                int i = 0;
+                while (i < s.Length && s[i] == ' ') i++;
+                int start = i;
+                while (i < s.Length && char.IsDigit(s[i])) i++;
+                if (i == start) { problem = "text line " + ln + ": no line number"; return null; }
+                int no = int.Parse(s.Substring(start, i - start));
+                if (no < 1 || no > 65279) { problem = "text line " + ln + ": line number out of range"; return null; }
+                var body = new List<byte>();
+                string err = TokenizeBody(s.Substring(i), body);
+                if (err != null) { problem = "line " + no + ": " + err; return null; }
+                body.Add(0x0D);
+                if (body.Count > 255) { problem = "line " + no + ": too long (" + body.Count + " bytes)"; return null; }
+                var line = new List<byte> { (byte)(no >> 8), (byte)(no & 255), (byte)body.Count };
+                line.AddRange(body);
+                lines[no] = line.ToArray();                              // a repeated number replaces the earlier line
+            }
+            var all = new List<byte>();
+            foreach (var kv in lines) all.AddRange(kv.Value);
+            int sum = 0;
+            foreach (byte b in all) sum += b;
+            all.Add((byte)(sum & 255));
+            return all.ToArray();
+        }
+
+        static string TokenizeBody(string s, List<byte> o)
+        {
+            int i = 0;
+            bool lineMode = false;                  // a line number constant is expected here (after GOTO, THEN, ...)
+            while (i < s.Length)
+            {
+                char c = s[i];
+                if (c == ' ' || c == '\t') { i++; continue; }
+                if (c == '"')                                            // string: copied as it is
+                {
+                    o.Add(0x22); i++;
+                    while (i < s.Length) { char q = s[i++]; o.Add((byte)q); if (q == '"') break; }
+                    lineMode = false;
+                    continue;
+                }
+                if (lineMode && char.IsDigit(c))
+                {
+                    int j = i;
+                    while (j < s.Length && char.IsDigit(s[j])) j++;
+                    int v;
+                    if (!int.TryParse(s.Substring(i, j - i), out v) || v > 65535) return "bad line number " + s.Substring(i, j - i);
+                    o.Add(0x1F); o.Add((byte)(v >> 8)); o.Add((byte)(v & 255)); o.Add(0x00);
+                    i = j;
+                    // another number may follow after a comma (ON ... GOTO 10,20,30)
+                    int k = i;
+                    while (k < s.Length && s[k] == ' ') k++;
+                    if (k < s.Length && s[k] == ',') { o.Add((byte)','); i = k + 1; }
+                    else lineMode = false;
+                    continue;
+                }
+                // keyword: longest match, case-insensitive (like the PC-1600, also inside longer names)
+                string kw = null; int code = 0;
+                foreach (var kv in byLength)
+                {
+                    if (i + kv.Key.Length <= s.Length && string.Compare(s, i, kv.Key, 0, kv.Key.Length, StringComparison.OrdinalIgnoreCase) == 0)
+                    { kw = kv.Key; code = kv.Value; break; }
+                }
+                if (kw != null)
+                {
+                    o.Add((byte)(code >> 8)); o.Add((byte)(code & 255));
+                    i += kw.Length;
+                    if (kw == "REM" || kw == "DATA")                     // the rest of the line is text
+                    {
+                        if (i < s.Length && s[i] == ' ') i++;
+                        for (; i < s.Length; i++) o.Add((byte)s[i]);
+                        return null;
+                    }
+                    lineMode = LineKeywords.Contains(kw);
+                    continue;
+                }
+                lineMode = false;
+                o.Add((byte)(c >= 'a' && c <= 'z' ? c - 32 : c));
+                i++;
+            }
+            return null;
         }
     }
 }
