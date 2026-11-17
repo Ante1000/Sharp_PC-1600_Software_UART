@@ -21,6 +21,7 @@ namespace UartSlTest
 
         BannerPanel banner;
         ComboBox comboPorts, comboBaud;
+        readonly ToolTip tips = new ToolTip { AutoPopDelay = 9000, InitialDelay = 400, ReshowDelay = 200, ShowAlways = true };
         TerminalForm term;
         Button btnTerminal;
         Button btnRefresh, btnOpen, btnBrowse, btnOpenDir, btnSend, btnSendOther, btnRefreshFiles;
@@ -133,6 +134,7 @@ namespace UartSlTest
                 });
                 var about = new LinkLabel { Text = "About", AutoSize = true, Left = 665, Top = 12, Anchor = AnchorStyles.Top | AnchorStyles.Right };
                 about.LinkClicked += delegate { using (var d = new AboutForm()) d.ShowDialog(this); };
+                tips.SetToolTip(about, "About SerComet: author, license and project page.");
                 Controls.Add(about);
             }
 
@@ -145,7 +147,7 @@ namespace UartSlTest
             radio1500.CheckedChanged += delegate { if (radio1500.Checked) SetTarget(); };
             radio1600.CheckedChanged += delegate { if (radio1600.Checked) SetTarget(); };
             radioOther.CheckedChanged += delegate { if (radioOther.Checked) SetTarget(); };
-            comboBaud.SelectedIndexChanged += delegate { ApplyBaud(); };
+            comboBaud.SelectedIndexChanged += delegate { if (comboBaud.Enabled) savedBaud = (string)comboBaud.SelectedItem; ApplyBaud(); };
             btnBrowse.Click += delegate
             {
                 using (var d = new FolderBrowserDialog())
@@ -174,6 +176,28 @@ namespace UartSlTest
                     if (d.ShowDialog() == DialogResult.OK) SendFile(d.FileName);
                 }
             };
+
+            tips.SetToolTip(comboPorts, "Serial (COM) port of the USB adapter connected to the Sharp.");
+            tips.SetToolTip(btnRefresh, "Re-scan the list of available COM ports.");
+            tips.SetToolTip(btnOpen, "Open or close the selected COM port.");
+            tips.SetToolTip(led, "Port status: green = open, dark = closed.");
+            tips.SetToolTip(radio1500, "Target: Sharp PC-1500 (RS-232 through the CE-158(X) interface).");
+            tips.SetToolTip(radio1600, "Target: Sharp PC-1600 (software serial Saver/Loader or its RS-232 port).");
+            tips.SetToolTip(radioOther, "Target: other Sharp pocket computers with the 15-pin connector (TTL-UART SIO).");
+            tips.SetToolTip(radioSoft, "Software UART in the Sharp (machine-language Saver/Loader), binary .sl16 files, fixed speed.");
+            tips.SetToolTip(radioRs, "Classic RS-232 text transfer, like a terminal program. The baud rate is selectable.");
+            tips.SetToolTip(radioSio, "TTL-UART SIO text transfer through the 15-pin connector. The baud rate is selectable.");
+            tips.SetToolTip(comboBaud, "Baud rate (8N1). Fixed and greyed out for Software Serial, selectable for the text modes.");
+            tips.SetToolTip(numDelay, "Pause after each line when a text file is sent, in milliseconds.");
+            tips.SetToolTip(txtDir, "Folder where received files are saved and listed from.");
+            tips.SetToolTip(btnBrowse, "Choose another folder.");
+            tips.SetToolTip(btnOpenDir, "Open the folder in Windows Explorer.");
+            tips.SetToolTip(lstFiles, "Files in the folder for the current mode (.sl16 or .bas). Select one to send it.");
+            tips.SetToolTip(btnSend, "Send the selected file to the Sharp. Start the Loader / receiver on the Sharp first.");
+            tips.SetToolTip(btnSendOther, "Pick any file from the disk and send it to the Sharp.");
+            tips.SetToolTip(btnRefreshFiles, "Re-read the folder and refresh the file list.");
+            tips.SetToolTip(btnTerminal, "Open a terminal window (like TeraTerm): typed characters are sent, received data is shown. Text modes only.");
+            tips.SetToolTip(txtLog, "Log of transfers and messages.");
 
             timer = new Timer { Interval = 100 };
             timer.Tick += TimerTick;
@@ -235,12 +259,15 @@ namespace UartSlTest
         }
 
         string Ext { get { return rs232 ? ".bas" : ".sl16"; } }
-        int Baud { get { return rs232 ? int.Parse((string)comboBaud.SelectedItem) : 19200; } }
+        string savedBaud = "9600";   // baud chosen by the user for the text modes
+        int Baud { get { return rs232 ? int.Parse((string)comboBaud.SelectedItem) : (radio1500.Checked ? 9600 : 19200); } }
 
         void UpdateMode()
         {
             rs232 = radioRs.Checked || radioSio.Checked;
             comboBaud.Enabled = numDelay.Enabled = btnTerminal.Enabled = rs232;
+            // greyed-out combo still shows the real speed of the mode: software serial = 19200 (PC-1600) or 9600 (PC-1500)
+            comboBaud.SelectedItem = rs232 ? savedBaud : (radio1500.Checked ? "9600" : "19200");
             if (!rs232 && term != null) term.Close();
             lblHint.Text = HintText();
             ApplyBaud();
@@ -814,6 +841,10 @@ namespace UartSlTest
             var btnClear = new Button { Text = "Clear", Left = 270, Top = 5, Width = 70, Height = 24 };
             btnClear.Click += delegate { txt.Clear(); txt.Focus(); };
             top.Controls.AddRange(new Control[] { chkEcho, lbl, comboNl, btnClear });
+            var tt = new ToolTip { AutoPopDelay = 9000, InitialDelay = 400, ShowAlways = true };
+            tt.SetToolTip(chkEcho, "Show typed characters locally (use it when the Sharp does not echo them).");
+            tt.SetToolTip(comboNl, "Characters sent when you press Enter.");
+            tt.SetToolTip(btnClear, "Clear the terminal window.");
 
             txt = new TextBox { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Vertical, Font = new Font("Consolas", 10F), ReadOnly = true, WordWrap = true };
             txt.BackColor = Color.Black;
@@ -895,9 +926,12 @@ namespace UartSlTest
                 try { System.Diagnostics.Process.Start((string)e.Link.LinkData); } catch { }
             };
             Controls.Add(web);
+            var tt = new ToolTip { AutoPopDelay = 9000, InitialDelay = 400, ShowAlways = true };
+            tt.SetToolTip(web, "Open the project page in the browser.");
             var ok = new Button { Text = "OK", Left = (380 - 80) / 2, Top = 268, Width = 80, DialogResult = DialogResult.OK };
             Controls.Add(ok);
             AcceptButton = ok;
+            tt.SetToolTip(ok, "Close this window.");
         }
 
         void AddLine(string text, int top, Font font, Color color)
