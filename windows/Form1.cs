@@ -16,6 +16,7 @@ namespace UartSlTest
         readonly List<byte> rx = new List<byte>();
         readonly object rxLock = new object();
         int lastRx;
+        volatile bool abortRequested;
         bool sending, blinkPhase;
         int lastRxAny, lastTxAny;     // time of the last received / sent data (also in the terminal)
         volatile bool rs232;
@@ -25,7 +26,7 @@ namespace UartSlTest
         ComboBox comboPorts, comboBaud, comboEol;
         readonly ToolTip tips = new ToolTip { AutoPopDelay = 9000, InitialDelay = 400, ReshowDelay = 200, ShowAlways = true };
         TerminalForm term;
-        Button btnTerminal;
+        Button btnTerminal, btnAbort;
         Button btnRefresh, btnOpen, btnBrowse, btnOpenDir, btnSend, btnSendOther, btnRefreshFiles;
         TextBox txtDir, txtLog;
         ListBox lstFiles;
@@ -113,7 +114,8 @@ namespace UartSlTest
             lstFiles = new ListBox { Left = 6, Top = 16, Width = 553, Height = 88, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
             chkPad = new CheckBox { Text = "Add dummy last line", Left = 8, Top = 106, Width = 140, Checked = true };
             chkEof = new CheckBox { Text = "Send end-of-file marker (Ctrl-Z)", Left = 155, Top = 106, Width = 230 };
-            gbFiles.Controls.AddRange(new Control[] { lstFiles, chkPad, chkEof });
+            btnAbort = Btn("Abort", Icons.Cross(), 462, 102, 90, 24, TR);
+            gbFiles.Controls.AddRange(new Control[] { lstFiles, chkPad, chkEof, btnAbort });
             btnSend = Btn("Send selected", Icons.Plane(), 585, 366, 125, 30, TR);
             btnSendOther = Btn("Send file...", Icons.File(), 585, 400, 125, 30, TR);
             btnRefreshFiles = Btn("Refresh list", Icons.Refresh(), 585, 434, 125, 30, TR);
@@ -179,6 +181,7 @@ namespace UartSlTest
             };
             btnRefreshFiles.Click += delegate { RefreshFiles(); };
             btnTerminal.Click += delegate { OpenTerminal(); };
+            btnAbort.Click += delegate { Abort(); };
             btnSend.Click += delegate
             {
                 if (lstFiles.SelectedItem == null) { Log("Select a file in the list."); return; }
@@ -220,6 +223,7 @@ namespace UartSlTest
             tips.SetToolTip(comboEol, "Line end sent after every line of a text file: CR, CR+LF (TeraTerm style) or LF.");
             tips.SetToolTip(chkPad, "Text modes: after the file, one extra line \"65279 REM\" is sent. The Sharp drops the last line it receives, so this sacrificial line is lost instead of the last line of your program.");
             tips.SetToolTip(chkEof, "Text modes: after the file (and the dummy line) send the end-of-file character 1Ah (Ctrl-Z) so that the Sharp finishes the reception. Switch it off if the Sharp reports an error.");
+            tips.SetToolTip(btnAbort, "Abort the transmission at once: stops sending the file and discards data waiting to be sent or received.");
             tips.SetToolTip(txtLog, "Log of transfers and messages.");
 
             timer = new Timer { Interval = 100 };
@@ -482,6 +486,15 @@ namespace UartSlTest
             return path;
         }
 
+        // forced stop of a transfer
+        void Abort()
+        {
+            abortRequested = true;
+            try { if (port != null && port.IsOpen) { port.DiscardOutBuffer(); port.DiscardInBuffer(); } } catch { }
+            lock (rxLock) { rx.Clear(); }
+            Log("ABORT: transmission stopped, buffers cleared.");
+        }
+
         int progStart, progEnd;
         string progText;
 
@@ -514,6 +527,7 @@ namespace UartSlTest
                 string err;
                 if (!Sl16.Check(data, out err)) { Log("File rejected: " + err); return; }
             }
+            abortRequested = false;
             sending = true;
             btnSend.Enabled = btnSendOther.Enabled = false;
             progText = "SENDING " + Path.GetFileName(path) + " (" + data.Length + " B)";
@@ -536,7 +550,7 @@ namespace UartSlTest
                     if (!text)
                     {
                         p.Write(data, 0, data.Length);
-                        while (p.BytesToWrite > 0)
+                        while (p.BytesToWrite > 0 && !abortRequested)
                         {
                             report(100 * (total - p.BytesToWrite) / total);
                             System.Threading.Thread.Sleep(50);
@@ -546,7 +560,7 @@ namespace UartSlTest
                     {
                         // text: line by line, every line ends with the selected line end
                         var line = new List<byte>();
-                        for (int i = 0; i <= data.Length; i++)
+                        for (int i = 0; i <= data.Length && !abortRequested; i++)
                         {
                             if (i == data.Length || data[i] == 0x0D || data[i] == 0x0A)
                             {
@@ -555,14 +569,15 @@ namespace UartSlTest
                                     line.AddRange(eol);
                                     p.Write(line.ToArray(), 0, line.Count);
                                     line.Clear();
-                                    while (p.BytesToWrite > 0) System.Threading.Thread.Sleep(5);
+                                    while (p.BytesToWrite > 0 && !abortRequested) System.Threading.Thread.Sleep(5);
                                     report(100 * i / total);
-                                    System.Threading.Thread.Sleep(delay);
+                                    for (int w = 0; w < delay && !abortRequested; w += 10) System.Threading.Thread.Sleep(10);
                                 }
                             }
                             else line.Add(data[i]);
                         }
                     }
+                    if (abortRequested) return;
                     if (text && pad)
                     {
                         // sacrificial last line: the Sharp does not keep the last line it receives
@@ -574,7 +589,7 @@ namespace UartSlTest
                     while (p.BytesToWrite > 0) System.Threading.Thread.Sleep(10);
                     report(100);
                 });
-                Log(text ? "Sent." : "Sent. The PC-1600 finishes after 0.5 s of silence; check X=1 (PRINT X) and LIST.");
+                if (abortRequested) Log("Transmission aborted."); else Log(text ? "Sent." : "Sent. The PC-1600 finishes after 0.5 s of silence; check X=1 (PRINT X) and LIST.");
             }
             catch (Exception ex) { Log("Send error: " + ex.Message); }
             finally
