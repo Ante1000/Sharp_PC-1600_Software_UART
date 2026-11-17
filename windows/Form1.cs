@@ -385,6 +385,16 @@ namespace UartSlTest
             Controls.AddRange(new Control[] { lblPort, comboPorts, btnRefresh, btnOpen, led, gbTarget, banner, gb,
                 lblDir, txtDir, btnBrowse, btnOpenDir, lblHint, lstFiles, btnSend, btnSendOther, btnRefreshFiles, txtLog });
 
+            // title row: everything else moves down by one row (40 px)
+            foreach (Control c in Controls) c.Top += 40;
+            Controls.Add(new Label
+            {
+                Text = "FILE TRANSFER TOOL FOR PC AND SHARP POCKET COMPUTERS",
+                Left = 10, Top = 8, Width = 700, Height = 26, Anchor = TLR,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Font = new Font("Segoe UI", 11F, FontStyle.Bold), ForeColor = Color.FromArgb(30, 70, 120)
+            });
+
             btnRefresh.Click += delegate { RefreshPorts(); };
             btnOpen.Click += delegate { TogglePort(); };
             radioSoft.CheckedChanged += delegate { UpdateMode(); };
