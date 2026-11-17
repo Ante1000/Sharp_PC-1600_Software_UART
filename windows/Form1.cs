@@ -81,7 +81,7 @@ namespace UartSlTest
 
             var gb = new GroupBox { Text = "Transmission mode", Left = 10, Top = 184, Width = 700, Height = 58, Anchor = TLR };
             radioSoft = new RadioButton { Text = "Software Serial", Checked = true };
-            radioRs = new RadioButton { Text = "RS-232 - serial interface" };
+            radioRs = new RadioButton { Text = "RS-232 - serial Int." };
             radioSio = new RadioButton { Text = "TTL-UART", Enabled = false };
             var lblBaud = new Label { Text = "Baud:" };
             comboBaud = new ComboBox { Width = 50, DropDownStyle = ComboBoxStyle.DropDownList };
@@ -267,7 +267,7 @@ namespace UartSlTest
             bool p1500 = radio1500.Checked;
             radioSoft.Enabled = radioRs.Enabled = !other;
             radioSio.Enabled = other;
-            radioRs.Text = "RS-232 - serial interface";
+            radioRs.Text = "RS-232 - serial Int.";
             if (other) radioSio.Checked = true;
             else if (radioSio.Checked) radioSoft.Checked = true;
             banner.ModelName = other ? "Sharp with 15-pin connector" : p1500 ? "Sharp PC-1500" : "Sharp PC-1600";
