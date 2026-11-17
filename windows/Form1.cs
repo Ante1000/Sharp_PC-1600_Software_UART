@@ -27,7 +27,9 @@ namespace UartSlTest
         CheckBox chkAuto;
         readonly WrapToolTip tips = new WrapToolTip { AutoPopDelay = 9000, InitialDelay = 400, ReshowDelay = 200, ShowAlways = true };
         TerminalForm term;
-        Button btnTerminal, btnAbort, btnConvert;
+        Button btnTerminal, btnAbort, btnConvert, btnLocations;
+        // default folders of the target computers: PC-1500, PC-1600, other 15-pin models
+        string[] locs = LoadLocations();
         Button btnRefresh, btnOpen, btnBrowse, btnOpenDir, btnSend, btnSendOther, btnRefreshFiles;
         TextBox txtDir, txtLog;
         ListBox lstFiles;
@@ -101,10 +103,11 @@ namespace UartSlTest
             var lblDir = new Label { Text = "Folder:", Left = 10, Top = 256, Width = 50 };
             txtDir = new TextBox
             {
-                Left = 65, Top = 252, Width = 460, Anchor = TLR,
-                Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "PC1600")
+                Left = 65, Top = 252, Width = 369, Anchor = TLR,
+                Text = locs[1]
             };
-            btnBrowse = Btn("Browse...", Icons.Folder(), 530, 249, 92, 28, TR);
+            btnLocations = Btn("Locations...", Icons.Folder(), 440, 249, 92, 28, TR);
+            btnBrowse = Btn("Browse...", Icons.Folder(), 536, 249, 88, 28, TR);
             btnOpenDir = Btn("Open", Icons.Folder(), 628, 249, 82, 28, TR);
 
             var gbInfo = new GroupBox { Text = "Info", Left = 10, Top = 280, Width = 700, Height = 84, Anchor = TLR };
@@ -138,7 +141,7 @@ namespace UartSlTest
             gbLog.Controls.Add(txtLog);
 
             Controls.AddRange(new Control[] { lblPort, comboPorts, btnRefresh, btnOpen, led, gbTarget, banner, gb,
-                lblDir, txtDir, btnBrowse, btnOpenDir, gbInfo, gbFiles, btnSend, btnSendOther, btnRefreshFiles, btnTerminal, gbLog });
+                lblDir, txtDir, btnLocations, btnBrowse, btnOpenDir, gbInfo, gbFiles, btnSend, btnSendOther, btnRefreshFiles, btnTerminal, gbLog });
 
             // title row: everything else moves down by one row (40 px)
             foreach (Control c in Controls) c.Top += 40;
@@ -186,6 +189,7 @@ namespace UartSlTest
             btnTerminal.Click += delegate { OpenTerminal(); };
             btnAbort.Click += delegate { Abort(); };
             btnConvert.Click += delegate { ConvertSelected(); };
+            btnLocations.Click += delegate { EditLocations(); };
             chkAuto.CheckedChanged += delegate { RefreshFiles(); };
             btnSend.Click += delegate
             {
@@ -231,6 +235,7 @@ namespace UartSlTest
             tips.SetToolTip(btnAbort, "Abort the transmission at once: stops sending the file and discards data waiting to be sent or received.");
             tips.SetToolTip(btnConvert, "Convert the selected file: program image (.sl16 / .img) to BASIC text (.bas), or BASIC text to a program image (PC-1600: .sl16, PC-1500: .img).");
             tips.SetToolTip(chkAuto, "Software Serial. ON: the converter is active. A program received from the Sharp is converted to BASIC text (.bas) and BASIC files are tokenized automatically when sent; temporary .sl16 images are not kept. OFF: only .sl16 images are used, no automatic conversion (use the Convert button).");
+            tips.SetToolTip(btnLocations, "Set the default folders of the programs for PC-1500, PC-1600 and the other models.");
             tips.SetToolTip(txtLog, "Log of transfers and messages.");
 
             timer = new Timer { Interval = 100 };
@@ -251,7 +256,7 @@ namespace UartSlTest
             banner.ModelName = other ? "Sharp with 15-pin connector" : p1500 ? "Sharp PC-1500" : "Sharp PC-1600";
             banner.Invalidate();
             numDelay.Value = p1500 ? 200 : 100;   // suggested starting values, adjust by testing
-            SetDefaultDir(other ? "PC_15-pin" : p1500 ? "PC1500" : "PC1600");
+            SetDefaultDir(locs[other ? 2 : p1500 ? 0 : 1]);
             UpdateMode();
         }
 
@@ -268,9 +273,56 @@ namespace UartSlTest
             return "Software serial: 19200 8N1, binary transfer (.sl16 files). RECEIVE: on the PC-1600 run SAVE (CALL addr,X). The file is saved automatically, named after the first REM.\r\nSEND: run LOAD on the PC-1600 first (CALL addr+176,X), then press Send (30 s to start).";
         }
 
-        void SetDefaultDir(string sub)
+        static string DefaultLocation(int i)
         {
-            txtDir.Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), sub);
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), i == 0 ? "PC1500" : i == 1 ? "PC1600" : "PC_15-pin");
+        }
+
+        static string LocationsFile()
+        {
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SerComet", "locations.txt");
+        }
+
+        static string[] LoadLocations()
+        {
+            var l = new[] { DefaultLocation(0), DefaultLocation(1), DefaultLocation(2) };
+            try
+            {
+                if (File.Exists(LocationsFile()))
+                {
+                    string[] lines = File.ReadAllLines(LocationsFile());
+                    for (int i = 0; i < 3 && i < lines.Length; i++) if (lines[i].Trim().Length > 0) l[i] = lines[i].Trim();
+                }
+            }
+            catch { }
+            return l;
+        }
+
+        void SaveLocations()
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(LocationsFile()));
+                File.WriteAllLines(LocationsFile(), locs);
+            }
+            catch (Exception ex) { Log("Cannot save the locations: " + ex.Message); }
+        }
+
+        // second window: the folders of the programs for each target computer
+        void EditLocations()
+        {
+            using (var d = new LocationsForm(locs, new[] { DefaultLocation(0), DefaultLocation(1), DefaultLocation(2) }))
+            {
+                if (d.ShowDialog(this) != DialogResult.OK) return;
+                locs = d.Result;
+                SaveLocations();
+                SetDefaultDir(locs[radioOther.Checked ? 2 : radio1500.Checked ? 0 : 1]);
+            }
+        }
+
+        void SetDefaultDir(string dir)
+        {
+            txtDir.Text = dir;
             RefreshFiles();
             Log("Folder: " + txtDir.Text);
         }
@@ -1432,6 +1484,58 @@ namespace UartSlTest
                 result.Append("\r\n");
             }
             return result.ToString().TrimEnd('\r', '\n');
+        }
+    }
+
+    // Window for the folders of the programs (one per target computer)
+    public class LocationsForm : Form
+    {
+        readonly TextBox[] boxes = new TextBox[3];
+        public string[] Result;
+
+        public LocationsForm(string[] current, string[] defaults)
+        {
+            Text = "Locations of the programs";
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MaximizeBox = MinimizeBox = false;
+            ShowInTaskbar = false;
+            StartPosition = FormStartPosition.CenterParent;
+            ClientSize = new Size(560, 170);
+            try { Icon = Icons.AppIcon(); } catch { }
+            var tt = new WrapToolTip { AutoPopDelay = 9000, InitialDelay = 400, ShowAlways = true };
+            string[] names = { "PC-1500", "PC-1600", "Other 15-pin" };
+            for (int i = 0; i < 3; i++)
+            {
+                int row = i;
+                Controls.Add(new Label { Text = names[i] + ":", Left = 12, Top = 19 + i * 36, Width = 85 });
+                boxes[i] = new TextBox { Left = 100, Top = 15 + i * 36, Width = 365, Text = current[i] };
+                var browse = new Button { Text = "Browse...", Left = 472, Top = 14 + i * 36, Width = 78, Height = 24 };
+                browse.Click += delegate
+                {
+                    using (var f = new FolderBrowserDialog())
+                    {
+                        f.SelectedPath = boxes[row].Text;
+                        if (f.ShowDialog() == DialogResult.OK) boxes[row].Text = f.SelectedPath;
+                    }
+                };
+                tt.SetToolTip(boxes[i], "Folder of the programs for this computer. It is selected together with the target computer.");
+                tt.SetToolTip(browse, "Choose the folder.");
+                Controls.AddRange(new Control[] { boxes[i], browse });
+            }
+            var defs = new Button { Text = "Defaults", Left = 12, Top = 128, Width = 90, Height = 26 };
+            defs.Click += delegate { for (int i = 0; i < 3; i++) boxes[i].Text = defaults[i]; };
+            tt.SetToolTip(defs, "Restore the standard folders (in Documents).");
+            var ok = new Button { Text = "OK", Left = 370, Top = 128, Width = 85, Height = 26, DialogResult = DialogResult.OK };
+            var cancel = new Button { Text = "Cancel", Left = 465, Top = 128, Width = 85, Height = 26, DialogResult = DialogResult.Cancel };
+            Controls.AddRange(new Control[] { defs, ok, cancel });
+            AcceptButton = ok;
+            CancelButton = cancel;
+            FormClosing += delegate
+            {
+                if (DialogResult != DialogResult.OK) return;
+                Result = new string[3];
+                for (int i = 0; i < 3; i++) Result[i] = boxes[i].Text.Trim().Length > 0 ? boxes[i].Text.Trim() : defaults[i];
+            };
         }
     }
 }
