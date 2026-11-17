@@ -136,7 +136,7 @@ namespace UartSlTest
                 Text = locs[1]
             };
             btnLocations = Btn("Folders", Icons.Folder(), 474, 249, 76, 28, TR);
-            btnBrowse = Btn("Browse...", Icons.Folder(), 554, 249, 76, 28, TR);
+            btnBrowse = Btn("Browse", Icons.Folder(), 554, 249, 76, 28, TR);
             btnOpenDir = Btn("Open", Icons.Folder(), 634, 249, 76, 28, TR);
 
             var gbInfo = new GroupBox { Text = "Info", Left = 10, Top = 280, Width = 700, Height = 84, Anchor = TLR };
