@@ -200,29 +200,50 @@ namespace UartSlTest
             using (var b = new SolidBrush(c)) g.FillEllipse(b, cx - 5, y, 10, 10);
         }
 
-        // Sharp PC-1600: light grey body, dark bezel with a wide LCD, function keys and QWERTY keyboard
+        // Sharp PC-1600 (as on the photo): light body, LCD on the left (2/3), dark brown panel with the logo on the right (1/3),
+        // dark QWERTY keys under the LCD, dark numeric keypad under the brown panel
         static void DrawPc1600(Graphics g, int kx, int top)
         {
-            FillRound(g, Color.FromArgb(120, 120, 118), kx - 86, top + 10, 172, 82, 7);      // shadow edge
-            FillRound(g, Color.FromArgb(208, 208, 203), kx - 85, top + 8, 170, 82, 7);       // body
-            FillRound(g, Color.FromArgb(48, 50, 56), kx - 81, top + 11, 162, 35, 4);         // bezel
-            using (var b = new SolidBrush(Color.FromArgb(170, 186, 152))) g.FillRectangle(b, kx - 62, top + 14, 120, 29);   // LCD
-            using (var b = new SolidBrush(Color.FromArgb(55, 70, 55)))
-                for (int r = 0; r < 4; r++)
-                {
-                    int w = new[] { 84, 104, 62, 96 }[r];
-                    for (int c = 0; c < w; c += 3) g.FillRectangle(b, kx - 59 + c, top + 17 + r * 6, 2, 4);   // dotted text rows
-                }
-            using (var f = new Font("Arial", 5.5F, FontStyle.Bold)) Text(g, "SHARP", f, Color.White, kx + 71, top + 14);
-            using (var b = new SolidBrush(Color.FromArgb(120, 125, 135)))
-                for (int i = 0; i < 3; i++) g.FillRectangle(b, kx - 77, top + 17 + i * 8, 10, 5);      // side keys left of the LCD
-            using (var b = new SolidBrush(Color.FromArgb(95, 98, 108)))
-                for (int i = 0; i < 9; i++) g.FillRectangle(b, kx - 77 + i * 17, top + 50, 14, 5);    // function key row
-            using (var b = new SolidBrush(Color.FromArgb(240, 240, 235)))
+            FillRound(g, Color.FromArgb(150, 150, 146), kx - 86, top + 10, 172, 82, 6);      // shadow edge
+            FillRound(g, Color.FromArgb(226, 226, 220), kx - 85, top + 8, 170, 82, 6);       // body
+            using (var b = new SolidBrush(Color.FromArgb(178, 194, 122))) g.FillRectangle(b, kx - 81, top + 12, 108, 30);   // LCD, no bezel
+            using (var p = new Pen(Color.FromArgb(130, 145, 90))) g.DrawRectangle(p, kx - 81, top + 12, 108, 30);
+            using (var b = new SolidBrush(Color.FromArgb(70, 50, 42))) g.FillRectangle(b, kx + 31, top + 12, 51, 30);       // brown panel
+            using (var f = new Font("Arial", 5.5F, FontStyle.Bold)) Text(g, "SHARP", f, Color.FromArgb(230, 225, 215), kx + 56, top + 16);
+
+            Color dark = Color.FromArgb(48, 48, 54), dot = Color.FromArgb(215, 215, 210);
+            using (var bd = new SolidBrush(dark))
+            using (var bl = new SolidBrush(dot))
+            using (var br = new SolidBrush(Color.FromArgb(190, 50, 45)))
+            using (var bg = new SolidBrush(Color.FromArgb(190, 190, 184)))
+            {
+                // QWERTY rows under the LCD (left 2/3)
+                int[] cnt = { 10, 9, 10 };
+                int[] off = { 0, 5, 0 };
                 for (int row = 0; row < 3; row++)
-                    for (int col = 0; col < 13; col++)
-                        g.FillRectangle(b, kx - 77 + col * 12 + row * 3, top + 58 + row * 8, 10, 6);   // QWERTY rows
-            using (var b = new SolidBrush(Color.FromArgb(240, 240, 235))) g.FillRectangle(b, kx - 30, top + 82, 60, 5);   // space bar
+                    for (int col = 0; col < cnt[row]; col++)
+                    {
+                        int x = kx - 80 + off[row] + col * 10;
+                        g.FillRectangle(bd, x, top + 47 + row * 9, 8, 6);
+                        g.FillRectangle(bl, x + 3, top + 49 + row * 9, 2, 2);
+                    }
+                // bottom row: red key, light keys, wide dark space bar
+                g.FillRectangle(br, kx - 80, top + 74, 8, 6);
+                for (int i = 0; i < 3; i++) g.FillRectangle(bg, kx - 70 + i * 10, top + 74, 8, 6);
+                g.FillRectangle(bd, kx - 38, top + 74, 30, 6);
+                for (int i = 0; i < 3; i++) g.FillRectangle(bg, kx - 6 + i * 10, top + 74, 8, 6);
+
+                // keypad under the brown panel (right 1/3): small top row + 4 rows x 5 keys
+                for (int col = 0; col < 5; col++)
+                    g.FillRectangle(col == 1 ? br : bd, kx + 32 + col * 10, top + 45, 8, 6);
+                for (int row = 0; row < 4; row++)
+                    for (int col = 0; col < 5; col++)
+                    {
+                        int x = kx + 32 + col * 10, y = top + 54 + row * 8;
+                        g.FillRectangle(row == 0 && col == 4 ? br : bd, x, y, 8, 6);
+                        g.FillRectangle(bl, x + 3, y + 2, 2, 2);
+                    }
+            }
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -363,6 +384,8 @@ namespace UartSlTest
             btnOpen.Click += delegate { TogglePort(); };
             radioSoft.CheckedChanged += delegate { UpdateMode(); };
             radioRs.CheckedChanged += delegate { UpdateMode(); };
+            radio1500.CheckedChanged += delegate { if (radio1500.Checked) SetDefaultDir("PC1500"); };
+            radio1600.CheckedChanged += delegate { if (radio1600.Checked) SetDefaultDir("PC1600"); };
             comboBaud.SelectedIndexChanged += delegate { ApplyBaud(); };
             btnBrowse.Click += delegate
             {
@@ -395,6 +418,13 @@ namespace UartSlTest
             timer = new Timer { Interval = 100 };
             timer.Tick += TimerTick;
             timer.Start();
+        }
+
+        void SetDefaultDir(string sub)
+        {
+            txtDir.Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), sub);
+            RefreshFiles();
+            Log("Folder: " + txtDir.Text);
         }
 
         string Ext { get { return rs232 ? ".bas" : ".sl16"; } }
