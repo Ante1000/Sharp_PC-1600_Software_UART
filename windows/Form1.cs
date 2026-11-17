@@ -20,7 +20,7 @@ namespace UartSlTest
         volatile bool rs232;
 
         BannerPanel banner;
-        ComboBox comboPorts, comboBaud;
+        ComboBox comboPorts, comboBaud, comboEol, comboFlow;
         readonly ToolTip tips = new ToolTip { AutoPopDelay = 9000, InitialDelay = 400, ReshowDelay = 200, ShowAlways = true };
         TerminalForm term;
         Button btnTerminal;
@@ -73,7 +73,7 @@ namespace UartSlTest
 
             banner = new BannerPanel { Left = 10, Top = 46, Width = 700, Height = 132, Anchor = TLR };
 
-            var gb = new GroupBox { Text = "Transmission mode", Left = 10, Top = 184, Width = 700, Height = 58, Anchor = TLR };
+            var gb = new GroupBox { Text = "Transmission mode", Left = 10, Top = 184, Width = 700, Height = 84, Anchor = TLR };
             radioSoft = new RadioButton { Text = "Software Serial", Left = 10, Checked = true };
             radioRs = new RadioButton { Text = "RS-232 - serial interface", Left = 130 };
             radioSio = new RadioButton { Text = "TTL-UART", Left = 300, Enabled = false };
@@ -83,6 +83,15 @@ namespace UartSlTest
             comboBaud.SelectedItem = "9600";
             var lblDelay = new Label { Text = "Line delay (ms):", Left = 532, Top = 27, Width = 82 };
             numDelay = new NumericUpDown { Left = 616, Top = 23, Width = 45, Minimum = 0, Maximum = 5000, Value = 100, Increment = 50 };
+            var lblEol = new Label { Text = "Line end:", Left = 10, Top = 56, Width = 55 };
+            comboEol = new ComboBox { Left = 68, Top = 52, Width = 70, DropDownStyle = ComboBoxStyle.DropDownList };
+            comboEol.Items.AddRange(new object[] { "CR", "CR+LF", "LF" });
+            comboEol.SelectedIndex = 1;
+            var lblFlow = new Label { Text = "Flow control:", Left = 160, Top = 56, Width = 75 };
+            comboFlow = new ComboBox { Left = 238, Top = 52, Width = 100, DropDownStyle = ComboBoxStyle.DropDownList };
+            comboFlow.Items.AddRange(new object[] { "None", "XON/XOFF", "RTS/CTS" });
+            comboFlow.SelectedIndex = 1;
+            gb.Controls.AddRange(new Control[] { lblEol, comboEol, lblFlow, comboFlow });
             foreach (RadioButton rb in new[] { radioSoft, radioRs, radioSio })
             {
                 rb.AutoSize = true;      // identical height and text baseline for all three
@@ -120,7 +129,7 @@ namespace UartSlTest
                 lblDir, txtDir, btnBrowse, btnOpenDir, gbInfo, lstFiles, btnSend, btnSendOther, btnRefreshFiles, btnTerminal, txtLog });
 
             // title row: everything else moves down by one row (40 px)
-            foreach (Control c in Controls) c.Top += 40;
+            foreach (Control c in Controls) c.Top += c.Top >= 249 ? 66 : 40;   // +40 title row, +26 second row of the Transmission box
             {
                 const string titleText = "FILE TRANSFER TOOL FOR PC AND SHARP POCKET COMPUTERS";
                 var titleFont = new Font("Segoe UI", 11F, FontStyle.Bold);
@@ -147,6 +156,7 @@ namespace UartSlTest
             radio1500.CheckedChanged += delegate { if (radio1500.Checked) SetTarget(); };
             radio1600.CheckedChanged += delegate { if (radio1600.Checked) SetTarget(); };
             radioOther.CheckedChanged += delegate { if (radioOther.Checked) SetTarget(); };
+            comboFlow.SelectedIndexChanged += delegate { ApplyFlow(); };
             comboBaud.SelectedIndexChanged += delegate { if (comboBaud.Enabled) savedBaud = (string)comboBaud.SelectedItem; ApplyBaud(); };
             btnBrowse.Click += delegate
             {
@@ -201,6 +211,8 @@ namespace UartSlTest
             tips.SetToolTip(btnSendOther, "Pick any file from the disk and send it to the Sharp.");
             tips.SetToolTip(btnRefreshFiles, "Re-read the folder and refresh the file list.");
             tips.SetToolTip(btnTerminal, "Open a terminal window (like TeraTerm): typed characters are sent, received data is shown. Text modes only.");
+            tips.SetToolTip(comboEol, "Line end sent after every line of a text file: CR, CR+LF (TeraTerm style) or LF.");
+            tips.SetToolTip(comboFlow, "Flow control for the text modes: None, XON/XOFF (the Sharp can pause the PC) or RTS/CTS. Not used by Software Serial.");
             tips.SetToolTip(txtLog, "Log of transfers and messages.");
 
             timer = new Timer { Interval = 100 };
@@ -264,13 +276,25 @@ namespace UartSlTest
         }
 
         string Ext { get { return rs232 ? ".bas" : ".sl16"; } }
+        Handshake FlowMode()
+        {
+            if (!rs232) return Handshake.None;
+            return comboFlow.SelectedIndex == 1 ? Handshake.XOnXOff : comboFlow.SelectedIndex == 2 ? Handshake.RequestToSend : Handshake.None;
+        }
+
+        void ApplyFlow()
+        {
+            try { if (port != null && port.IsOpen) port.Handshake = FlowMode(); } catch (Exception ex) { Log("Error: " + ex.Message); }
+        }
+
         string savedBaud = "9600";   // baud chosen by the user for the text modes
         int Baud { get { return rs232 ? int.Parse((string)comboBaud.SelectedItem) : (radio1500.Checked ? 9600 : 19200); } }
 
         void UpdateMode()
         {
             rs232 = radioRs.Checked || radioSio.Checked;
-            comboBaud.Enabled = numDelay.Enabled = btnTerminal.Enabled = rs232;
+            comboBaud.Enabled = numDelay.Enabled = btnTerminal.Enabled = comboEol.Enabled = comboFlow.Enabled = rs232;
+            ApplyFlow();
             // greyed-out combo still shows the real speed of the mode: software serial = 19200 (PC-1600) or 9600 (PC-1500)
             comboBaud.SelectedItem = rs232 ? savedBaud : (radio1500.Checked ? "9600" : "19200");
             if (!rs232 && term != null) term.Close();
@@ -325,7 +349,7 @@ namespace UartSlTest
             try
             {
                 port = new SerialPort(name, Baud, Parity.None, 8, StopBits.One);
-                port.Handshake = Handshake.None;
+                port.Handshake = FlowMode();
                 port.ReadBufferSize = 65536;
                 port.DataReceived += OnData;
                 port.Open();
@@ -457,6 +481,8 @@ namespace UartSlTest
             catch (Exception ex) { Log("Read error: " + ex.Message); return; }
             bool text = rs232;
             int delay = (int)numDelay.Value;
+            int eolIdx = comboEol.SelectedIndex;
+            byte[] eol = eolIdx == 1 ? new byte[] { 13, 10 } : eolIdx == 2 ? new byte[] { 10 } : new byte[] { 13 };
             if (!text)
             {
                 string err;
@@ -477,7 +503,7 @@ namespace UartSlTest
                     }
                     else
                     {
-                        // text: line by line, every line ends with CR
+                        // text: line by line, every line ends with the selected line end
                         var line = new List<byte>();
                         for (int i = 0; i <= data.Length; i++)
                         {
@@ -485,7 +511,7 @@ namespace UartSlTest
                             {
                                 if (line.Count > 0)
                                 {
-                                    line.Add(0x0D);
+                                    line.AddRange(eol);
                                     p.Write(line.ToArray(), 0, line.Count);
                                     line.Clear();
                                     while (p.BytesToWrite > 0) System.Threading.Thread.Sleep(5);
