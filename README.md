@@ -254,9 +254,14 @@ A separate, small program (like the SAVER/LOADER of the PC-1500): it puts two ma
   the programs on tape before the first try.**
 - Not for use inside a program: it replaces the program that is running. Type it as a direct command.
 - Limits: a program must lie in one 16 KB window (module `8000H`-`BFFFH`, or the internal RAM) and be shorter than 16 KB.
-  The addresses of the BASIC pointers (`FE3CH` = start, `FE3FH` = end, 3 bytes each, the first two bytes the address) were found with
-  `Basic/pc1600_memfinder.txt` on one machine; whether the end pointer is the only thing that has to be set when a program is
-  loaded is **not confirmed yet**: the emulator test uses a memory with these two pointers. If `LIST` shows garbage after a load, tell it.
+- What the BASIC of the PC-1600 needs (found on a real machine with memory dumps): the program lies from the address in `FE3CH` (on the
+  test machine `80C5H`) in lines `number (2 bytes, high first), length (1 byte: from the token to the CR), the line, 0DH`, **followed by
+  one byte `FFH` (the end marker)**. The end of the program is kept in **two** places, `FE3FH` and `F868H` (the address of the marker);
+  `STATUS 1` is the difference of the end and the start. SAVE sends the bytes from the start to the marker (not the marker).
+  LOAD stores the file from the start, writes the marker over the checksum byte and sets both pointers; after an error (2 or 4) it leaves the
+  memory empty (`FFH` at the start, both pointers = start), as `NEW` does. Without the marker the BASIC listed the rest of an older program.
+  The installer checks that `F868H` and `FE3FH` hold the same address.
+- In RUN mode one command per line: a line with two statements separated by `:` (`POKE ... : POKE ...`) was refused on the test machine.
 - The emulator test (`tools/verify_sl.py`): SAVE gives exactly the bytes of the program plus the checksum; LOAD takes the stream
   without any gap at all phases and +-3 % of the speed, keeps the registers of the BASIC (also the alternate ones), and
   reports the errors above.
