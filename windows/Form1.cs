@@ -81,7 +81,7 @@ namespace UartSlTest
 
             var gb = new GroupBox { Text = "Transmission mode", Left = 10, Top = 184, Width = 700, Height = 58, Anchor = TLR };
             radioSoft = new RadioButton { Text = "Software Serial", Checked = true };
-            radioRs = new RadioButton { Text = "RS-232 - serial Int." };
+            radioRs = new RadioButton { Text = "RS-232 - serial I/F" };
             radioSio = new RadioButton { Text = "TTL-UART", Enabled = false };
             var lblBaud = new Label { Text = "Baud:" };
             comboBaud = new ComboBox { Width = 50, DropDownStyle = ComboBoxStyle.DropDownList };
@@ -99,18 +99,29 @@ namespace UartSlTest
             comboFlow.SelectedIndex = 1;       // XON/XOFF, as it was fixed before
             foreach (RadioButton rb in new[] { radioSoft, radioRs, radioSio }) rb.AutoSize = true;   // identical height and baseline
             foreach (Label l in new[] { lblBaud, lblDelay, lblEol, lblFlow }) l.AutoSize = true;
-            // one tight row: every control placed right after the previous one (own width + a small gap)
-            var row = new Control[] { radioSoft, radioRs, radioSio, lblBaud, comboBaud, lblDelay, numDelay, lblEol, comboEol, lblFlow, comboFlow };
-            int x = 4;
-            foreach (Control c in row)
+            // one row, evenly spread over the box: a label sits right next to its field, the remaining
+            // space is divided into equal gaps between the groups (radio, radio, radio, Baud, Delay, EOL, Flow)
+            var groups = new Control[][] {
+                new Control[] { radioSoft }, new Control[] { radioRs }, new Control[] { radioSio },
+                new Control[] { lblBaud, comboBaud }, new Control[] { lblDelay, numDelay },
+                new Control[] { lblEol, comboEol }, new Control[] { lblFlow, comboFlow } };
+            Func<Control, int> wid = c => c is RadioButton || c is Label ? c.PreferredSize.Width : c.Width;
+            int used = 0;
+            foreach (var g in groups) foreach (Control c in g) used += wid(c) + (c is Label ? 1 : 0);
+            int left = 6, right = gb.Width - 12;                   // usable width of the box
+            int gap = Math.Max(0, (right - left - used) / (groups.Length - 1));
+            int x = left;
+            foreach (var g in groups)
             {
-                bool isLabel = c is Label;
-                c.Left = x;
-                c.Top = c is RadioButton ? 24 : isLabel ? 27 : 23;
-                int w = c is RadioButton || isLabel ? c.PreferredSize.Width : c.Width;
-                x += w + (isLabel ? 1 : c is RadioButton ? 0 : 4);
+                foreach (Control c in g)
+                {
+                    c.Left = x;
+                    c.Top = c is RadioButton ? 24 : c is Label ? 27 : 23;
+                    x += wid(c) + (c is Label ? 1 : 0);
+                }
+                x += gap;
             }
-            gb.Controls.AddRange(row);
+            gb.Controls.AddRange(new Control[] { radioSoft, radioRs, radioSio, lblBaud, comboBaud, lblDelay, numDelay, lblEol, comboEol, lblFlow, comboFlow });
 
             var lblDir = new Label { Text = "Folder:", Left = 10, Top = 256, Width = 50 };
             txtDir = new TextBox
@@ -267,7 +278,7 @@ namespace UartSlTest
             bool p1500 = radio1500.Checked;
             radioSoft.Enabled = radioRs.Enabled = !other;
             radioSio.Enabled = other;
-            radioRs.Text = "RS-232 - serial Int.";
+            radioRs.Text = "RS-232 - serial I/F";
             if (other) radioSio.Checked = true;
             else if (radioSio.Checked) radioSoft.Checked = true;
             banner.ModelName = other ? "Sharp with 15-pin connector" : p1500 ? "Sharp PC-1500" : "Sharp PC-1600";
