@@ -25,7 +25,7 @@ namespace UartSlTest
         CheckBox chkPad, chkEof;
         ComboBox comboPorts, comboBaud, comboEol;
         CheckBox chkAuto;
-        readonly ToolTip tips = new ToolTip { AutoPopDelay = 9000, InitialDelay = 400, ReshowDelay = 200, ShowAlways = true };
+        readonly WrapToolTip tips = new WrapToolTip { AutoPopDelay = 9000, InitialDelay = 400, ReshowDelay = 200, ShowAlways = true };
         TerminalForm term;
         Button btnTerminal, btnAbort, btnConvert;
         Button btnRefresh, btnOpen, btnBrowse, btnOpenDir, btnSend, btnSendOther, btnRefreshFiles;
@@ -1037,7 +1037,7 @@ namespace UartSlTest
             var btnClear = new Button { Text = "Clear", Left = 270, Top = 5, Width = 70, Height = 24 };
             btnClear.Click += delegate { txt.Clear(); txt.Focus(); };
             top.Controls.AddRange(new Control[] { chkEcho, lbl, comboNl, btnClear });
-            var tt = new ToolTip { AutoPopDelay = 9000, InitialDelay = 400, ShowAlways = true };
+            var tt = new WrapToolTip { AutoPopDelay = 9000, InitialDelay = 400, ShowAlways = true };
             tt.SetToolTip(chkEcho, "Show typed characters locally (use it when the Sharp does not echo them).");
             tt.SetToolTip(comboNl, "Characters sent when you press Enter.");
             tt.SetToolTip(btnClear, "Clear the terminal window.");
@@ -1125,7 +1125,7 @@ namespace UartSlTest
                 try { System.Diagnostics.Process.Start((string)e.Link.LinkData); } catch { }
             };
             Controls.Add(web);
-            var tt = new ToolTip { AutoPopDelay = 9000, InitialDelay = 400, ShowAlways = true };
+            var tt = new WrapToolTip { AutoPopDelay = 9000, InitialDelay = 400, ShowAlways = true };
             tt.SetToolTip(web, "Open the project page in the browser.");
             var ok = new Button { Text = "OK", Left = (380 - 80) / 2, Top = 336, Width = 80, DialogResult = DialogResult.OK };
             Controls.Add(ok);
@@ -1401,6 +1401,37 @@ namespace UartSlTest
                 i++;
             }
             return null;
+        }
+    }
+
+    // ToolTip that wraps its text at about 30 characters per line
+    public class WrapToolTip : ToolTip
+    {
+        const int Width = 30;
+
+        public new void SetToolTip(Control control, string caption)
+        {
+            base.SetToolTip(control, Wrap(caption));
+        }
+
+        public static string Wrap(string text)
+        {
+            if (text == null) return null;
+            var result = new StringBuilder();
+            foreach (string para in text.Replace("\r\n", "\n").Split('\n'))
+            {
+                int col = 0;
+                foreach (string word in para.Split(' '))
+                {
+                    if (word.Length == 0) { if (col > 0) { result.Append(' '); col++; } continue; }
+                    if (col > 0 && col + 1 + word.Length > Width) { result.Append("\r\n"); col = 0; }
+                    else if (col > 0) { result.Append(' '); col++; }
+                    result.Append(word);
+                    col += word.Length;
+                }
+                result.Append("\r\n");
+            }
+            return result.ToString().TrimEnd('\r', '\n');
         }
     }
 }
