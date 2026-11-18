@@ -1602,7 +1602,7 @@ namespace UartSlTest
     }
 
     // PC-1600 BASIC program <-> text. Written from scratch using the token tables of
-    // "Das Systemhandbuch f\u00FCr den PC-1600" by David von Oheimb (appendix 5, Tokentabelle) and checked against
+    // "Das Systemhandbuch fuer den PC-1600" by David von Oheimb (appendix 5, Tokentabelle) and checked against
     // programs saved by a real PC-1600. Program format: [line no. hi, lo][length][tokens, text, 0D]..., end FFh.
     // Tokens are two bytes (E3/E6/E7/E8/F0/F1/F2 + code); a line number constant is stored as 1Fh hi lo 00h.
     public static class Pc1600Basic
