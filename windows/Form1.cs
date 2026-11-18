@@ -17,7 +17,9 @@ namespace UartSlTest
         readonly object rxLock = new object();
         int lastRx;
         volatile bool abortRequested;
-        bool sending, blinkPhase, rxStartLogged;
+        bool sending, rxStartLogged;
+        readonly System.Diagnostics.Stopwatch blinkWatch = System.Diagnostics.Stopwatch.StartNew();
+        Timer blinkTimer;
         int lastRxAny, lastTxAny;     // time of the last received / sent data (also in the terminal)
         volatile bool rs232;
 
@@ -295,6 +297,10 @@ namespace UartSlTest
             timer = new Timer { Interval = 100 };
             timer.Tick += TimerTick;
             timer.Start();
+            // the arrows flash with a frequency that depends on the baud rate (a fast timer: the 100 ms tick is too slow for 6 to 8 Hz)
+            blinkTimer = new Timer { Interval = 20 };
+            blinkTimer.Tick += BlinkTick;
+            blinkTimer.Start();
         }
 
         // target computer: default folder and the available transmission modes
@@ -750,6 +756,22 @@ namespace UartSlTest
         }
 
         // end of transmission = silence: 0.8 s (software serial, SAVE sends without gaps), 3 s (RS-232 text)
+        // flashes per second of the arrows for a baud rate: 300 -> 0.5, 600 -> 1, 1200 -> 2, 2400 -> 3, 4800 -> 4, 9600 -> 5, 19200 -> 6, 28800 -> 7, 38400 -> 8
+        static double BlinkHz(int baud)
+        {
+            return baud <= 300 ? 0.5 : baud <= 600 ? 1 : baud <= 1200 ? 2 : baud <= 2400 ? 3 : baud <= 4800 ? 4 : baud <= 9600 ? 5 : baud <= 19200 ? 6 : baud <= 28800 ? 7 : 8;
+        }
+
+        void BlinkTick(object sender, EventArgs e)
+        {
+            if (!(banner.Sending || banner.Receiving)) return;
+            int baud = 9600;
+            try { baud = Baud; } catch { }
+            long half = (long)(500.0 / BlinkHz(baud));                // half of a period in ms
+            bool on = (blinkWatch.ElapsedMilliseconds / half) % 2 == 0;
+            if (banner.Blink != on) { banner.Blink = on; banner.Invalidate(); }
+        }
+
         void TimerTick(object sender, EventArgs e)
         {
             byte[] data = null;
@@ -779,12 +801,11 @@ namespace UartSlTest
             if (started) Log("Start receiving ''");
             receiving |= unchecked(Environment.TickCount - lastRxAny) < 300;
             bool tx = sending || unchecked(Environment.TickCount - lastTxAny) < 300;
-            blinkPhase = !blinkPhase;                      // timer tick = 100 ms -> 5 flashes per second
             bool changed = banner.Receiving != receiving || banner.Sending != tx;
             banner.Receiving = receiving;
             banner.Sending = tx;
-            if (receiving || tx) { banner.Blink = blinkPhase; banner.Invalidate(); }
-            else if (changed || banner.Blink) { banner.Blink = false; banner.Invalidate(); }
+            if (!(receiving || tx)) { if (changed || banner.Blink) { banner.Blink = false; banner.Invalidate(); } }
+            else if (changed) banner.Invalidate();
             if (data != null) Received(data);
         }
 
