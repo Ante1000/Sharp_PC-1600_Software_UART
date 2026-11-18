@@ -56,7 +56,7 @@ def build():
     add(120, 'P=PEEK(65084)+256*PEEK(65085)')
     add(140, 'IF P<32768 THEN GOTO 910')
     add(150, 'CLS:PRINT "SL READY ";D;" BPS"')
-    add(160, 'PRINT "LOAD: CALL &C100"')
+    add(160, 'PRINT "LOAD:CALL&C100 (NEW first)"')
     add(170, 'PRINT "SAVE: CALL &C200"')
     add(190, 'END')
     add(200, 'U=INT((Q+3)/4):IF U<1 THEN LET U=1')
