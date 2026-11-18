@@ -224,6 +224,8 @@ namespace UartSlTest
             btnView.Click += delegate { ViewSelected(); };
             lstFiles.SelectedIndexChanged += delegate { SelectionChanged(); };
             btnSend.Enabled = false;
+            btnDelete.Enabled = false;
+            btnConvert.Enabled = false;
             comboFlow.SelectedIndexChanged += delegate { ApplyFlow(); };
             btnLocations.Click += delegate { EditLocations(); };
             btnDelete.Click += delegate { DeleteSelected(); };
@@ -237,7 +239,7 @@ namespace UartSlTest
             {
                 using (var d = new OpenFileDialog())
                 {
-                    d.Filter = rs232 ? "BASIC text (*.bas;*.txt)|*.bas;*.txt|All files|*.*" : chkAuto.Checked ? "PC-1600 files (*.sl16;*.bas;*.txt)|*.sl16;*.bas;*.txt|All files|*.*" : "PC-1600 images (*.sl16)|*.sl16|All files|*.*";
+                    d.Filter = rs232 ? "BASIC text (*.bas;*.txt)|*.bas;*.txt|All files|*.*" : chkAuto.Checked ? "PC-1600 files (*.img;*.bas;*.txt)|*.img;*.bas;*.txt|All files|*.*" : "Program images (*.img)|*.img|All files|*.*";
                     if (d.ShowDialog() == DialogResult.OK) SendFile(d.FileName);
                 }
             };
@@ -249,7 +251,7 @@ namespace UartSlTest
             tips.SetToolTip(radio1500, "Target: Sharp PC-1500 (RS-232 through the CE-158(X) interface).");
             tips.SetToolTip(radio1600, "Target: Sharp PC-1600 (software serial Saver/Loader or its RS-232 port).");
             tips.SetToolTip(radioOther, "Target: other Sharp pocket computers with the 15-pin connector (TTL-UART SIO).");
-            tips.SetToolTip(radioSoft, "Software UART in the Sharp (machine-language Saver/Loader), binary .sl16 files, fixed speed.");
+            tips.SetToolTip(radioSoft, "Software UART in the Sharp (machine-language Saver/Loader), binary .img files, fixed speed.");
             tips.SetToolTip(radioRs, "Classic RS-232 text transfer, like a terminal program. The baud rate is selectable.");
             tips.SetToolTip(radioSio, "TTL-UART SIO text transfer through the 15-pin connector. The baud rate is selectable.");
             tips.SetToolTip(comboBaud, "Baud rate (8N1). Fixed and greyed out for Software Serial, selectable for the text modes.");
@@ -261,7 +263,7 @@ namespace UartSlTest
             tips.SetToolTip(txtDir, "Folder where received files are saved and listed from.");
             tips.SetToolTip(btnBrowse, "Choose another folder.");
             tips.SetToolTip(btnOpenDir, "Open the folder in Windows Explorer.");
-            tips.SetToolTip(lstFiles, "Files in the folder for the current mode (.sl16 or .bas). Select one to send it.");
+            tips.SetToolTip(lstFiles, "Files in the folder for the current mode (.img or .bas). Select one to send it.");
             tips.SetToolTip(btnSend, "Send the selected file to the Sharp. Start the Loader / receiver on the Sharp first.");
             tips.SetToolTip(btnSendOther, "Pick any file from the disk and send it to the Sharp.");
             tips.SetToolTip(btnRefreshFiles, "Re-read the folder and refresh the file list.");
@@ -270,8 +272,8 @@ namespace UartSlTest
             tips.SetToolTip(btnView, "Show the contents of the selected file (BASIC text; program images are shown as BASIC).");
             tips.SetToolTip(chkEof, "Add the end-of-file marker. Text modes: after the file (and the dummy line) send the end-of-file character 1Ah (Ctrl-Z) so that the Sharp finishes the reception (1Ah is the end-of-file code of an ASCII file). Switch it off if the Sharp reports an error.");
             tips.SetToolTip(btnAbort, "Abort the transmission at once: stops sending the file and discards data waiting to be sent or received.");
-            tips.SetToolTip(btnConvert, "Convert the selected file: program image (.sl16 / .img) to BASIC text (.bas), or BASIC text to a program image (PC-1600: .sl16, PC-1500: .img).");
-            tips.SetToolTip(chkAuto, "Software Serial. ON: the converter is active. A program received from the Sharp is converted to BASIC text (.bas) and BASIC files are tokenized automatically when sent; temporary .sl16 images are not kept. OFF: only .sl16 images are used, no automatic conversion (use the Convert button).");
+            tips.SetToolTip(btnConvert, "Software UART mode only. Convert the selected file: BASIC text (.bas, .txt) to a program image (.img), or a program image to BASIC text (.bas).");
+            tips.SetToolTip(chkAuto, "Software UART. ON: the converter is active. A program received from the Sharp is saved as BASIC text (.bas) and BASIC files are tokenized automatically when sent (the image is not kept). OFF: only program images (.img) are used, no automatic conversion (use the Convert button).");
             tips.SetToolTip(btnLocations, "Set the default folders of the programs for PC-1500, PC-1600 and the other models.");
             tips.SetToolTip(btnDelete, "Delete the selected file from the folder (after a confirmation).");
             tips.SetToolTip(comboFlow, "Flow control for the text modes: None, XON/XOFF (default), RTS/CTS or DSR/DTR (the PC waits while the Sharp does not hold DSR). Not used by Software Serial.");
@@ -309,7 +311,7 @@ namespace UartSlTest
                 return "PC-1500 software serial (Saver/Loader for the PC-1500) is not implemented yet. Use RS-232 - CE-158(X).";
             if (radioRs.Checked)
                 return "RS-232 serial port of the PC-1600, text transfer (.bas files), same baud rate on both sides. RECEIVE: send the program as text from the PC-1600. The file is saved after 3 s of silence, named after the first REM line.\r\nSEND: start receiving on the PC-1600 first, then press Send. Lines are sent one by one with the delay set above.";
-            return "Software serial: 19200 8N1, binary transfer (.sl16 files). RECEIVE: on the PC-1600 run SAVE (CALL addr,X). The file is saved automatically, named after the first REM.\r\nSEND: run LOAD on the PC-1600 first (CALL addr+176,X), then press Send (30 s to start).";
+            return "Software serial: 19200 8N1, binary transfer (.img files). RECEIVE: on the PC-1600 run SAVE (CALL addr,X). The file is saved automatically, named after the first REM.\r\nSEND: run LOAD on the PC-1600 first (CALL addr+176,X), then press Send (30 s to start).";
         }
 
         static string DefaultLocation(int i)
@@ -385,7 +387,7 @@ namespace UartSlTest
             catch (Exception ex) { Log("Send error: " + ex.Message); }
         }
 
-        string Ext { get { return rs232 ? ".bas" : ".sl16"; } }
+        string Ext { get { return rs232 ? ".bas" : ".img"; } }
         Handshake FlowMode()
         {
             if (!rs232) return Handshake.None;
@@ -454,7 +456,7 @@ namespace UartSlTest
                 if (Directory.Exists(txtDir.Text))
                 {
                     var found = new List<string>();
-                    foreach (string pat in rs232 ? new[] { "*.bas", "*.txt" } : chkAuto.Checked ? new[] { "*.sl16", "*.bas", "*.txt" } : new[] { "*.sl16" })
+                    foreach (string pat in rs232 ? new[] { "*.bas", "*.txt" } : chkAuto.Checked ? new[] { "*.img", "*.bas", "*.txt" } : new[] { "*.img" })
                         foreach (string f in Directory.GetFiles(txtDir.Text, pat)) found.Add(Path.GetFileName(f));
                     found.Sort(StringComparer.OrdinalIgnoreCase);
                     lstFiles.Items.AddRange(found.ToArray());
@@ -570,7 +572,7 @@ namespace UartSlTest
                 Directory.CreateDirectory(txtDir.Text);
                 if (rs232)
                 {
-                    string name = Sl16.NameFromText(data) ?? "PROGRAM_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                    string name = ProgImage.NameFromText(data) ?? "PROGRAM_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
                     string path = UniquePath(name, ".bas");
                     File.WriteAllBytes(path, data);
                     Log("RECEIVED " + data.Length + " B (text) -> " + Path.GetFileName(path));
@@ -578,30 +580,31 @@ namespace UartSlTest
                     return;
                 }
                 string err;
-                if (Sl16.Check(data, out err))
+                if (ProgImage.CheckStream(data, out err))
                 {
-                    string name = Sl16.NameFromRem(data) ?? "PROGRAM_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                    byte[] img = ProgImage.ImageFromStream(data);
+                    string name = ProgImage.NameFromRem(img) ?? "PROGRAM_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
                     string path = null;
                     string note = "";
                     if (chkAuto.Checked && !radio1500.Checked)
                     {
                         // auto tokenize ON: the image only exists in memory, the file is BASIC text
                         string problem;
-                        string bas = Pc1600Basic.Detokenize(data, out problem);
+                        string bas = Pc1600Basic.Detokenize(img, out problem);
                         if (problem == null)
                         {
                             path = UniquePath(name, ".bas");
                             File.WriteAllBytes(path, Encoding.GetEncoding(28591).GetBytes(bas));
                             note = " (converted from the PC-1600 intermediate code)";
                         }
-                        else Log("Conversion problem: " + problem + "; the image is kept as .sl16.");
+                        else Log("Conversion problem: " + problem + "; the image is kept as .img.");
                     }
                     if (path == null)
                     {
-                        path = UniquePath(name, ".sl16");
-                        File.WriteAllBytes(path, data);
+                        path = UniquePath(name, ".img");
+                        File.WriteAllBytes(path, img);
                     }
-                    Log("RECEIVED " + data.Length + " B, " + Sl16.CountLines(data) + " lines, checksum OK -> " + Path.GetFileName(path) + note);
+                    Log("RECEIVED " + data.Length + " B, " + ProgImage.CountLines(img) + " lines, checksum OK -> " + Path.GetFileName(path) + note);
                     RefreshFiles();
                 }
                 else
@@ -622,19 +625,11 @@ namespace UartSlTest
             return path;
         }
 
-        // BASIC text <-> program image, for the selected target computer
+        // BASIC text <-> program image (.img) for the selected target computer; only for a selected .bas / .txt / .img file
         void ConvertSelected()
         {
-            string path = null;
-            if (lstFiles.SelectedItem != null) path = Path.Combine(txtDir.Text, (string)lstFiles.SelectedItem);
-            else
-                using (var d = new OpenFileDialog())
-                {
-                    d.InitialDirectory = Directory.Exists(txtDir.Text) ? txtDir.Text : null;
-                    d.Filter = "Program image or BASIC text (*.sl16;*.img;*.bas;*.txt)|*.sl16;*.img;*.bas;*.txt|All files|*.*";
-                    if (d.ShowDialog() != DialogResult.OK) return;
-                    path = d.FileName;
-                }
+            if (lstFiles.SelectedItem == null) return;
+            string path = Path.Combine(txtDir.Text, (string)lstFiles.SelectedItem);
             try
             {
                 bool p1500 = radio1500.Checked;
@@ -643,9 +638,9 @@ namespace UartSlTest
                 var enc = Encoding.GetEncoding(28591);
                 string problem;
                 string outPath;
-                if (ext == ".sl16" || ext == ".img")
+                if (ext == ".img")
                 {
-                    string bas = Pc1600Basic.Detokenize(data, p1500 || ext == ".img", out problem);
+                    string bas = Pc1600Basic.Detokenize(data, p1500, out problem);
                     outPath = UniquePathIn(Path.GetDirectoryName(path), Path.GetFileNameWithoutExtension(path), ".bas");
                     File.WriteAllBytes(outPath, enc.GetBytes(bas));
                     Log("Converted " + Path.GetFileName(path) + " to BASIC text -> " + Path.GetFileName(outPath) + (problem != null ? " (warning: " + problem + ")" : ""));
@@ -655,7 +650,7 @@ namespace UartSlTest
                     Log("Tokenizing to the " + (p1500 ? "PC-1500" : "PC-1600") + " intermediate code format...");
                     byte[] img = Pc1600Basic.Tokenize(enc.GetString(data), p1500, out problem);
                     if (img == null) { Log("Tokenizer error: " + problem); return; }
-                    outPath = UniquePathIn(Path.GetDirectoryName(path), Path.GetFileNameWithoutExtension(path), p1500 ? ".img" : ".sl16");
+                    outPath = UniquePathIn(Path.GetDirectoryName(path), Path.GetFileNameWithoutExtension(path), ".img");
                     File.WriteAllBytes(outPath, img);
                     Log("Converted " + Path.GetFileName(path) + " -> " + Path.GetFileName(outPath) + " (" + img.Length + " B)");
                 }
@@ -675,9 +670,9 @@ namespace UartSlTest
                 byte[] data = File.ReadAllBytes(path);
                 string ext = Path.GetExtension(path).ToLowerInvariant();
                 string text, problem;
-                if (ext == ".sl16" || ext == ".img")
+                if (ext == ".img")
                 {
-                    text = Pc1600Basic.Detokenize(data, ext == ".img", out problem);
+                    text = Pc1600Basic.Detokenize(data, radio1500.Checked, out problem);
                     if (problem != null) text += "\r\n[" + problem + "]";
                     // program image: the user chooses between the original bytes and the detokenized BASIC text
                     new PreviewForm(name + " (" + data.Length + " B)", text, HexDump(data)).Show(this);
@@ -718,6 +713,12 @@ namespace UartSlTest
             bool sel = lstFiles.SelectedItem != null;
             if (btnView != null) btnView.Enabled = sel;
             if (btnSend != null) btnSend.Enabled = sel && !sending;
+            if (btnDelete != null) btnDelete.Enabled = sel;
+            if (btnConvert != null)
+            {
+                string ext = sel ? Path.GetExtension((string)lstFiles.SelectedItem).ToLowerInvariant() : "";
+                btnConvert.Enabled = sel && !rs232 && (ext == ".bas" || ext == ".txt" || ext == ".img");   // Software UART mode only
+            }
         }
 
         void DeleteSelected()
@@ -782,19 +783,21 @@ namespace UartSlTest
             if (!text)
             {
                 string err;
-                if (!path.EndsWith(".sl16", StringComparison.OrdinalIgnoreCase))
+                byte[] img;
+                if (path.EndsWith(".img", StringComparison.OrdinalIgnoreCase)) img = data;
+                else
                 {
-                    if (!chkAuto.Checked) { Log("Auto tokenize is off: only .sl16 files can be sent (use Convert or switch Auto tokenize on)."); return; }
+                    if (!chkAuto.Checked) { Log("Auto tokenize is off: only .img files can be sent (use Convert or switch Auto tokenize on)."); return; }
                     // BASIC text: convert to the intermediate code of the Sharp first
                     if (radio1500.Checked) { Log("Software Serial (Saver/Loader) does not exist for the PC-1500 yet. Use RS-232 or the Convert button."); return; }
                     Log("Tokenizing to the PC-1600 intermediate code format...");
                     string problem;
-                    byte[] tok = Pc1600Basic.Tokenize(Encoding.GetEncoding(28591).GetString(data), out problem);
-                    if (tok == null) { Log("Tokenizer error: " + problem); return; }
-                    data = tok;
-                    Log("Tokenized: " + Sl16.CountLines(data) + " lines, " + data.Length + " B (program image + checksum).");
+                    img = Pc1600Basic.Tokenize(Encoding.GetEncoding(28591).GetString(data), out problem);
+                    if (img == null) { Log("Tokenizer error: " + problem); return; }
+                    Log("Tokenized: " + ProgImage.CountLines(img) + " lines, " + img.Length + " B (program image).");
                 }
-                if (!Sl16.Check(data, out err)) { Log("File rejected: " + err); return; }
+                if (!ProgImage.CheckImage(img, out err)) { Log("File rejected: " + err); return; }
+                data = ProgImage.StreamFromImage(img);       // the Software UART sends the image + a checksum byte
             }
             abortRequested = false;
             sending = true;
@@ -869,17 +872,20 @@ namespace UartSlTest
         }
     }
 
-    // .sl16 file = exactly the stream sent by SAVE: BASIC program bytes + 1 checksum byte (sum mod 256).
-    // Line: [line number 2 B][length 1 B][content, ends with 0D]. The end marker (FF) is not stored.
-    public static class Sl16
+    // Program image (.img): the BASIC program as it is in the memory of the Sharp (intermediate code), like the .img of the
+    // Pocket Tools: lines [line number 2 B][length 1 B][content, ends with 0D], no header, no checksum; a trailing FFh
+    // (end marker) is accepted. The Software UART (Saver/Loader) stream is the image + 1 checksum byte (sum mod 256).
+    public static class ProgImage
     {
-        public static bool Check(byte[] s, out string err)
+        // the length of the image without a trailing end marker
+        static int Len(byte[] s) { return s.Length > 0 && s[s.Length - 1] == 0xFF ? s.Length - 1 : s.Length; }
+
+        // image only (no checksum)
+        public static bool CheckImage(byte[] s, out string err)
         {
             err = null;
-            if (s.Length < 2) { err = "stream too short (empty program?)"; return false; }
-            int n = s.Length - 1, sum = 0;
-            for (int i = 0; i < n; i++) sum += s[i];
-            if ((sum & 0xFF) != s[n]) { err = "bad checksum"; return false; }
+            int n = Len(s);
+            if (n < 4) { err = "image too short (empty program?)"; return false; }
             int p = 0;
             while (p < n)
             {
@@ -892,9 +898,38 @@ namespace UartSlTest
             return true;
         }
 
+        // the stream of the Software UART: image + checksum
+        public static bool CheckStream(byte[] s, out string err)
+        {
+            err = null;
+            if (s.Length < 2) { err = "stream too short (empty program?)"; return false; }
+            int n = s.Length - 1, sum = 0;
+            for (int i = 0; i < n; i++) sum += s[i];
+            if ((sum & 0xFF) != s[n]) { err = "bad checksum"; return false; }
+            var img = new byte[n];
+            Array.Copy(s, img, n);
+            return CheckImage(img, out err);
+        }
+
+        public static byte[] ImageFromStream(byte[] s)
+        {
+            var img = new byte[s.Length - 1];
+            Array.Copy(s, img, img.Length);
+            return img;
+        }
+
+        public static byte[] StreamFromImage(byte[] img)
+        {
+            int n = Len(img), sum = 0;
+            var s = new byte[n + 1];
+            for (int i = 0; i < n; i++) { s[i] = img[i]; sum += img[i]; }
+            s[n] = (byte)(sum & 255);
+            return s;
+        }
+
         public static int CountLines(byte[] s)
         {
-            int n = s.Length - 1, p = 0, c = 0;
+            int n = Len(s), p = 0, c = 0;
             while (p + 3 <= n) { p += 3 + s[p + 2]; c++; }
             return c;
         }
@@ -902,7 +937,7 @@ namespace UartSlTest
         // name taken from the first line that starts with REM (token F1 AB)
         public static string NameFromRem(byte[] s)
         {
-            int n = s.Length - 1, p = 0;
+            int n = Len(s), p = 0;
             while (p + 3 <= n)
             {
                 int len = s[p + 2];
@@ -1399,18 +1434,17 @@ namespace UartSlTest
         static readonly HashSet<string> LineKeywords = new HashSet<string> { "GOTO", "GOSUB", "THEN", "ELSE", "RESTORE", "RUN", "RESUME", "LIST", "LLIST", "DELETE", "RENUM", "AUTO" };
 
         // ---------------------------------------------------------------- program image -> text
-        // data: the program image; a trailing checksum byte (.sl16) is checked and removed, a trailing FFh is accepted
+        // data: the program image (.img); a trailing FFh is accepted
         public static string Detokenize(byte[] data, out string problem) { return Detokenize(data, false, out problem); }
 
-        // pc1500: image = lines + FFh end marker (no checksum); PC-1600: .sl16 = lines + checksum (a trailing FFh is accepted too)
+        // the image is the same for both computers: lines only (the table of tokens differs)
         public static string Detokenize(byte[] data, bool pc1500, out string problem)
         {
             problem = null;
             Tab t = pc1500 ? T1500 : T1600;
             int n = data.Length;
             string err;
-            if (!pc1500 && Sl16.Check(data, out err)) n--;           // .sl16 = program + checksum
-            else if (n > 0 && data[n - 1] == 0xFF) n--;                // image with the end marker
+            if (n > 0 && data[n - 1] == 0xFF) n--;                     // image with the end marker
             var sb = new StringBuilder();
             int p = 0;
             while (p < n)
@@ -1475,10 +1509,10 @@ namespace UartSlTest
             return sb.ToString();
         }
 
-        // ---------------------------------------------------------------- text -> program image (.sl16)
+        // ---------------------------------------------------------------- text -> program image (.img)
         public static byte[] Tokenize(string text, out string problem) { return Tokenize(text, false, out problem); }
 
-        // PC-1600: program + checksum (.sl16), line numbers after GOTO etc. in binary form. PC-1500: program + FFh (numbers stay ASCII)
+        // PC-1600: line numbers after GOTO etc. in binary form (1F hi lo 00). PC-1500: numbers stay ASCII. No end marker, no checksum.
         public static byte[] Tokenize(string text, bool pc1500, out string problem)
         {
             problem = null;
@@ -1508,10 +1542,6 @@ namespace UartSlTest
             }
             var all = new List<byte>();
             foreach (var kv in lines) all.AddRange(kv.Value);
-            if (pc1500) { all.Add(0xFF); return all.ToArray(); }
-            int sum = 0;
-            foreach (byte b in all) sum += b;
-            all.Add((byte)(sum & 255));
             return all.ToArray();
         }
 
