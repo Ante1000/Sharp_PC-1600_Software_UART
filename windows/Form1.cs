@@ -197,7 +197,7 @@ namespace UartSlTest
                     Left = x0 + 40, Top = 4 + (32 - ts.Height) / 2, Anchor = AnchorStyles.Top
                 });
                 // "by Alex F4VTS" to the right of the title, a round "?" button (About) on the left
-                var by = new Label { Text = "by Alex F4VTS", AutoSize = true, Font = new Font("Segoe UI", 9F, FontStyle.Italic), ForeColor = Color.FromArgb(90, 110, 140), Left = x0 + 40 + ts.Width + 10, Top = 4 + (32 - ts.Height) / 2 + 3, Anchor = AnchorStyles.Top };
+                var by = new Label { Text = "by Alex F4VTS", AutoSize = true, Font = new Font("Segoe UI", 9F, FontStyle.Bold | FontStyle.Italic), ForeColor = Color.FromArgb(90, 110, 140), Left = x0 + 40 + ts.Width + 10, Top = 4 + (32 - ts.Height) / 2 + 3, Anchor = AnchorStyles.Top };
                 Controls.Add(by);
                 var about = new RoundHelpButton { Left = 10, Top = 6, Width = 26, Height = 26, Anchor = AnchorStyles.Top | AnchorStyles.Left };
                 about.Click += delegate { using (var d = new AboutForm()) d.ShowDialog(this); };
@@ -2025,12 +2025,13 @@ namespace UartSlTest
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
             var r = new Rectangle(1, 1, Width - 3, Height - 3);
-            using (var b = new SolidBrush(hover ? Color.FromArgb(50, 110, 180) : Color.FromArgb(30, 70, 120))) g.FillEllipse(b, r);
-            using (var p = new Pen(Color.FromArgb(150, 215, 255), 1.5f)) g.DrawEllipse(p, r);
+            // system colours: the same as the window background, so the button is discreet
+            using (var b = new SolidBrush(hover ? SystemColors.ControlLightLight : SystemColors.Control)) g.FillEllipse(b, r);
+            using (var p = new Pen(hover ? SystemColors.ControlDarkDark : SystemColors.ControlDark, 1.5f)) g.DrawEllipse(p, r);
             using (var f = new Font("Segoe UI", 11F, FontStyle.Bold))
             {
                 SizeF sz = g.MeasureString("?", f);
-                g.DrawString("?", f, Brushes.White, (Width - sz.Width) / 2 + 0.5f, (Height - sz.Height) / 2);
+                g.DrawString("?", f, SystemBrushes.ControlText, (Width - sz.Width) / 2 + 0.5f, (Height - sz.Height) / 2);
             }
         }
     }
