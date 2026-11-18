@@ -1577,7 +1577,7 @@ namespace UartSlTest
             AddLine("Author: Alex Matczewski F4VTS", 170, new Font("Segoe UI", 10F, FontStyle.Bold), Color.Black);
             AddLine("Copyright \u00A9 2026", 194, new Font("Segoe UI", 10F, FontStyle.Bold), Color.Black);
             AddLine("License: GNU General Public License v3.0", 218, new Font("Segoe UI", 8.5F), Color.Black);
-            AddLine("BASIC token tables: \"Das Systemhandbuch fuer den PC-1600\"", 266, new Font("Segoe UI", 8.5F), Color.Black);
+            AddLine("BASIC token tables: \"Das Systemhandbuch f\u00FCr den PC-1600\"", 266, new Font("Segoe UI", 8.5F), Color.Black);
             AddLine("by David von Oheimb. Thank you!", 286, new Font("Segoe UI", 8.5F), Color.Black);
             //AddLine("PC-1500 token table: \"Tips PC-1500\" document", 304, new Font("Segoe UI", 8.5F), Color.Black);
             var web = new LinkLabel { Text = "Web: github.com/Ante1000", Left = 0, Top = 242, Width = 380, Height = 20, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Segoe UI", 10F) };
@@ -1602,7 +1602,7 @@ namespace UartSlTest
     }
 
     // PC-1600 BASIC program <-> text. Written from scratch using the token tables of
-    // "Das Systemhandbuch fuer den PC-1600" by David von Oheimb (appendix 5, Tokentabelle) and checked against
+    // "Das Systemhandbuch f\u00FCr den PC-1600" by David von Oheimb (appendix 5, Tokentabelle) and checked against
     // programs saved by a real PC-1600. Program format: [line no. hi, lo][length][tokens, text, 0D]..., end FFh.
     // Tokens are two bytes (E3/E6/E7/E8/F0/F1/F2 + code); a line number constant is stored as 1Fh hi lo 00h.
     public static class Pc1600Basic
