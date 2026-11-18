@@ -1,4 +1,4 @@
-; UART1600 SAVER / LOADER for the Sharp PC-1600: BASIC programs through the UART (19200 bps, 8N1, fixed timing)
+; UART1600 SAVER / LOADER V3.0 for the Sharp PC-1600: BASIC programs through the UART (1200 to 19200 bps, 8N1; the BASIC installer patches the delays)
 ; TX = PC7 (OPC, I/O 18H bit 7, CN9 pin 29), RX = PB2 (OPB, I/O 1FH bit 2, CN9 pin 27); CPU about 3.0 MHz.
 ; The BASIC program is copied as it lies in the memory (tokens). The file is the bytes of the program followed by one
 ; byte: the sum of all the bytes before it, modulo 256. The end of a received file is 0.5 s without a byte.
@@ -64,11 +64,13 @@ sv_loop:
  out (OPC),a
  scf
  rr c
- ld d,4               ; 19200 bps: bit = 156 T-states
+sv_dn:
+ ld d,4               ; PATCH N (delay loop count, 16 T-states each); 19200 bps as assembled: bit = 156 T-states
 sv_dl:
  dec d
  jr nz,sv_dl
- jr $+4               ; skips 2 of the 8 NOPs
+sv_jd:
+ jr $+4               ; PATCH D: displacement 0..8 = the number of NOPs skipped (4 T-states each); BIT = 100 + 16*N - 4*D
  nop
  nop
  nop
@@ -154,11 +156,21 @@ ld_poll:
  jr nz,ld_poll
  jr ld_tmo            ; no byte: the end of the file
 ld_st:
- ld d,1               ; half bit: 83 + 16 - 32 = 67 T-states
+ld_hn:
+ ld d,1               ; PATCH N: half bit delay
 ld_hl:
  dec d
  jr nz,ld_hl
- jr ld_hp              ; 12 T-states (the same time as before: the 8 NOPs behind it were never run)
+ld_hj:
+ jr ld_hp              ; PATCH D: displacement 0..8 (the 8 NOPs are skipped as assembled)
+ nop
+ nop
+ nop
+ nop
+ nop
+ nop
+ nop
+ nop
 ld_hp:
  in a,(OPB)           ; middle of the start bit
  and 0x04
@@ -168,26 +180,42 @@ ld_hp:
  jr $+2               ; calibrated pad for the first bit: 16 T-states = JR (12) + NOP (4)
  nop
 ld_bit:
- ld d,4
+ld_bn:
+ ld d,4               ; PATCH N
 ld_dd:
  dec d
  jr nz,ld_dd
- jr $+2               ; 36 T-states in 6 bytes (before: JR + 6 NOPs run)
- jr $+2
- jr $+2
+ld_bj:
+ jr $+4               ; PATCH D: BIT = 99 + 16*N - 4*D
+ nop
+ nop
+ nop
+ nop
+ nop
+ nop
+ nop
+ nop
  in a,(OPB)           ; sample in the middle of the bit
  and 0x04
  xor 0x00
  add a,0xFC           ; carry = bit
  rr c
  djnz ld_bit
- ld d,4               ; middle of the stop bit
+ld_sn:
+ ld d,4               ; PATCH N (the same value as for the bits): middle of the stop bit
 ld_d2:
  dec d
  jr nz,ld_d2
- jr $+2               ; 36 T-states
- jr $+2
- jr $+2
+ld_sj:
+ jr $+4               ; PATCH D (the same value as for the bits)
+ nop
+ nop
+ nop
+ nop
+ nop
+ nop
+ nop
+ nop
  ld (hl),c
  inc hl
  ex af,af'

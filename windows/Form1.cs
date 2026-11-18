@@ -44,6 +44,7 @@ namespace UartSlTest
         public Form1()
         {
             InitializeComponent();
+            Text = "SerComet " + AppInfo.Version;
             try { Icon = Icons.AppIcon(); } catch { }
             BuildUi();
             SetRefreshMode(false);
@@ -215,7 +216,7 @@ namespace UartSlTest
             radio1500.CheckedChanged += delegate { if (radio1500.Checked) SetTarget(); };
             radio1600.CheckedChanged += delegate { if (radio1600.Checked) SetTarget(); };
             radioOther.CheckedChanged += delegate { if (radioOther.Checked) SetTarget(); };
-            comboBaud.SelectedIndexChanged += delegate { if (comboBaud.Enabled) savedBaud = (string)comboBaud.SelectedItem; ApplyBaud(); };
+            comboBaud.SelectedIndexChanged += delegate { if (comboBaud.Enabled && comboBaud.SelectedItem != null) { if (rs232) savedBaud = (string)comboBaud.SelectedItem; else savedSoftBaud = (string)comboBaud.SelectedItem; } ApplyBaud(); };
             btnBrowse.Click += delegate
             {
                 using (var d = new FolderBrowserDialog())
@@ -263,7 +264,7 @@ namespace UartSlTest
             tips.SetToolTip(radio1500, "Target: Sharp PC-1500 (RS-232 through the CE-158(X) interface).");
             tips.SetToolTip(radio1600, "Target: Sharp PC-1600 (software serial Saver/Loader or its RS-232 port).");
             tips.SetToolTip(radioOther, "Target: other Sharp pocket computers with the 15-pin connector (TTL-UART SIO).");
-            tips.SetToolTip(radioSoft, "Software UART in the Sharp (machine-language Saver/Loader), binary .img files, fixed speed.");
+            tips.SetToolTip(radioSoft, "Software UART in the Sharp (machine-language Saver/Loader), binary .img files, speed 1200 to 19200 (as chosen in the SL installer).");
             tips.SetToolTip(radioRs, "Classic RS-232 text transfer, like a terminal program. The baud rate is selectable.");
             tips.SetToolTip(radioSio, "TTL-UART SIO text transfer through the 15-pin connector. The baud rate is selectable.");
             tips.SetToolTip(comboBaud, "Baud rate (8N1). Fixed and greyed out for Software Serial, selectable for the text modes.");
@@ -335,7 +336,7 @@ namespace UartSlTest
                 return "Into the PC-1600 (Send): INIT\"COM1:\",512 / SETCOM\"COM1:\",2400 / LOAD\"COM1:\" (same baud rate as in SerComet).\r\n" +
                        "From the PC-1600 (Receive): SAVE\"COM1:\",A. Text transfer (.bas); the file is saved after EOF (1Ah) or 3 s of silence.\r\n" +
                        "SETCOM\"COM1:\",2400,8,N,1,X,N switches XON/XOFF on in the Sharp (the default Flow of SerComet).";
-            return "Software serial: 19200 8N1, binary transfer (.img files). RECEIVE: on the PC-1600 type CALL &C200 (SAVE). The file is saved automatically, named after the first REM.\r\nSEND: type CALL &C100 (LOAD) on the PC-1600 first, then press Send (30 s to start).";
+            return "Software UART: 8N1 at the speed chosen here and in the SL installer (9600 recommended), binary transfer (.img files). RECEIVE: on the PC-1600 type CALL &C200 (SAVE). The file is saved automatically, named after the first REM.\r\nSEND: type CALL &C100 (LOAD) on the PC-1600 first, then press Send (30 s to start).";
         }
 
         static string DefaultLocation(int i)
@@ -350,7 +351,8 @@ namespace UartSlTest
         sealed class ModelCfg
         {
             public int Mode;                    // 0 Software UART, 1 RS-232, 2 TTL-UART
-            public string Baud = "9600";
+            public string Baud = "9600";        // text modes
+            public string SoftBaud = "9600";    // Software UART
             public int Delay = 100, Eol = 1, Flow = 1;
             public bool Eof = true, Auto = true;
             public string Dir;                  // null = the default folder
@@ -383,6 +385,7 @@ namespace UartSlTest
             var c = cfg[m];
             c.Mode = radioSio.Checked ? 2 : radioRs.Checked ? 1 : 0;
             c.Baud = savedBaud;
+            c.SoftBaud = savedSoftBaud;
             c.Delay = (int)numDelay.Value;
             c.Eol = comboEol.SelectedIndex;
             c.Flow = comboFlow.SelectedIndex;
@@ -397,7 +400,8 @@ namespace UartSlTest
             if (m == 2) radioSio.Checked = true;
             else if (c.Mode == 1) radioRs.Checked = true;
             else radioSoft.Checked = true;
-            savedBaud = comboBaud.Items.Contains(c.Baud) ? c.Baud : "9600";
+            savedBaud = Array.IndexOf(TextBauds, c.Baud) >= 0 ? c.Baud : "9600";
+            savedSoftBaud = Array.IndexOf(SoftBauds, c.SoftBaud) >= 0 ? c.SoftBaud : "9600";
             numDelay.Value = Math.Max(numDelay.Minimum, Math.Min(numDelay.Maximum, c.Delay));
             comboEol.SelectedIndex = c.Eol >= 0 && c.Eol < 3 ? c.Eol : 1;
             comboFlow.SelectedIndex = c.Flow >= 0 && c.Flow < 4 ? c.Flow : 1;
@@ -441,6 +445,7 @@ namespace UartSlTest
                     var c = cfg[m];
                     c.Mode = IndexOf(ModeNames, get(n, "Mode"), c.Mode);
                     c.Baud = get(n, "Baud") ?? c.Baud;
+                    c.SoftBaud = get(n, "SoftBaud") ?? c.SoftBaud;
                     int v;
                     if (int.TryParse(get(n, "Delay"), out v)) c.Delay = v;
                     c.Eol = IndexOf(EolNames, get(n, "LineEnd"), c.Eol);
@@ -474,6 +479,7 @@ namespace UartSlTest
                     sb.AppendLine("[" + ModelNames[m] + "]");
                     sb.AppendLine("Mode=" + ModeNames[c.Mode]);
                     sb.AppendLine("Baud=" + c.Baud);
+                    sb.AppendLine("SoftBaud=" + c.SoftBaud);
                     sb.AppendLine("Delay=" + c.Delay);
                     sb.AppendLine("LineEnd=" + EolNames[c.Eol]);
                     sb.AppendLine("Flow=" + FlowNames[c.Flow]);
@@ -565,17 +571,42 @@ namespace UartSlTest
             try { if (port != null && port.IsOpen) { port.Handshake = FlowMode(); if (rs232 && comboFlow.SelectedIndex == 3) port.DtrEnable = true; } } catch (Exception ex) { Log("Error: " + ex.Message); }
         }
 
-        string savedBaud = "9600";   // baud chosen by the user for the text modes
-        int Baud { get { return rs232 ? int.Parse((string)comboBaud.SelectedItem) : (radio1500.Checked ? 9600 : 19200); } }
+        string savedBaud = "9600";       // baud chosen by the user for the text modes
+        string savedSoftBaud = "9600";   // baud of the Software UART of the PC-1600 (the same as chosen in the SL installer)
+        static readonly string[] TextBauds = { "300", "600", "1200", "2400", "4800", "9600", "19200" };
+        static readonly string[] SoftBauds = { "1200", "2400", "4800", "9600", "19200" };
+
+        // the combo has all the speeds for the text modes and the five speeds of the SL installer for the Software UART
+        void FillBaud(string[] list)
+        {
+            if (comboBaud.Items.Count == list.Length) return;
+            comboBaud.Items.Clear();
+            comboBaud.Items.AddRange(list);
+        }
+
+        int Baud
+        {
+            get
+            {
+                if (rs232) return int.Parse((string)comboBaud.SelectedItem);
+                return radio1500.Checked ? 9600 : int.Parse((string)comboBaud.SelectedItem);
+            }
+        }
 
         void UpdateMode()
         {
             rs232 = radioRs.Checked || radioSio.Checked;
-            comboBaud.Enabled = numDelay.Enabled = btnTerminal.Enabled = comboEol.Enabled = comboFlow.Enabled = chkEof.Enabled = rs232;
+            bool softEdit = !rs232 && !radio1500.Checked;                  // Software UART of the PC-1600: the speed can be chosen
+            numDelay.Enabled = btnTerminal.Enabled = comboEol.Enabled = comboFlow.Enabled = chkEof.Enabled = rs232;
             chkAuto.Enabled = !rs232;
+            comboBaud.Enabled = false;                                      // (so that filling the list does not change the saved values)
+            FillBaud(rs232 ? TextBauds : SoftBauds);
+            comboBaud.SelectedItem = rs232 ? savedBaud : softEdit ? savedSoftBaud : "9600";
+            comboBaud.Enabled = rs232 || softEdit;
+            tips.SetToolTip(comboBaud, softEdit
+                ? "Baud rate of the Software UART (8N1), the same as chosen in the SL installer. 9600 is the default and recommended, 19200 is fast, the lower speeds 4800 and 2400 (and 1200) are more reliable."
+                : rs232 ? "Baud rate (8N1) of the text transfer." : "Baud rate: fixed for this computer.");
             ApplyFlow();
-            // greyed-out combo still shows the real speed of the mode: software serial = 19200 (PC-1600) or 9600 (PC-1500)
-            comboBaud.SelectedItem = rs232 ? savedBaud : (radio1500.Checked ? "9600" : "19200");
             if (!rs232 && term != null) term.Close();
             lblHint.Text = HintText();
             ApplyBaud();
@@ -1580,7 +1611,7 @@ namespace UartSlTest
             ClientSize = new Size(380, 372);
 
             Controls.Add(new PictureBox { Image = Icons.Comet(72), SizeMode = PictureBoxSizeMode.AutoSize, Left = (380 - 72) / 2, Top = 16 });
-            AddLine("SerComet", 100, new Font("Segoe UI", 16F, FontStyle.Bold), Color.FromArgb(30, 70, 120));
+            AddLine("SerComet " + AppInfo.Version, 100, new Font("Segoe UI", 16F, FontStyle.Bold), Color.FromArgb(30, 70, 120));
             AddLine("File transfer tool for PC and Sharp pocket computers", 138, new Font("Segoe UI", 10F, FontStyle.Bold), Color.Black);
             AddLine("Author: Alex Matczewski F4VTS", 170, new Font("Segoe UI", 9.5F, FontStyle.Bold), Color.Black);
             AddLine("Copyright \u00A9 2026", 194, new Font("Segoe UI", 9.5F, FontStyle.Bold), Color.Black);
@@ -2048,5 +2079,10 @@ namespace UartSlTest
                 g.DrawString("?", f, SystemBrushes.ControlText, (Width - sz.Width) / 2 + 0.5f, (Height - sz.Height) / 2);
             }
         }
+    }
+
+    public static class AppInfo
+    {
+        public const string Version = "1.1";      // SerComet 1.1: Software UART speeds 1200 to 19200 (SL V3.0), settings.ini, .img files
     }
 }

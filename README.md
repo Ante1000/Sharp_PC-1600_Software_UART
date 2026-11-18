@@ -60,7 +60,8 @@ used. According to the PC-1600 schematic and the Technical Reference the levels 
 | `wav/uart1600.wav` | tape recording of the program for `LOAD "CAS:UART1600"` (about 5 minutes) |
 | `tools/pc1600_bas2wav.py` | BASIC text -> tape recording (WAV) and decoder check (from the PC-1600 game repository); lines must not exceed 80 characters |
 | `Basic/pc1600_memfinder.txt`, `wav/pc1600_memfinder.wav` | diagnostic program: finds the BASIC program in the RAM and the pointers in the work area and sends a report through UART1600 (for a future Saver/Loader of BASIC programs) |
-| `Basic/sl.txt` | **Saver/Loader**: BASIC installer (36 lines, 1.8 KB) of the machine-language LOAD (`&C100`) and SAVE (`&C200`) of BASIC programs through the UART, fixed 19200 bps |
+| `Basic/sl.txt` | **Saver/Loader V3.0**: BASIC installer (48 lines, 2.2 KB) of the machine-language LOAD (`&C100`) and SAVE (`&C200`) of BASIC programs through the UART, 1200 to 19200 bps (ENTER = 9600) |
+| `Basic/sl_v2.1.txt`, `asm/uart1600_sl_v2.1.asm` | the previous version V2.1 (fixed 19200 bps): kept as a working fallback |
 | `asm/uart1600_sl.asm` | source of SAVE and LOAD (position independent, no buffer) |
 | `tools/build_sl.py`, `tools/verify_sl.py` | makes `Basic/sl.txt`; emulator test of SAVE and LOAD |
 | `asm/uart1600.asm` | source of SEROUT, SERIN and PROBE (assembler: `z80asm`) with all comments |
@@ -231,18 +232,19 @@ and the sender is read correctly by an ideal receiver between about -4 % and +4 
 | The machine-language area at `C0C5H` is at least 767 bytes long | to be checked with `STATUS 2` / `POKE` (see How to use); if it is shorter, the code overwrites the BASIC program |
 | Whether memory reads of `8000H`-`FFFFH` have side effects | assumed not (reads of ordinary RAM, ROM and card windows) |
 
-## Saver/Loader of BASIC programs (UART1600 SL, 19200 bps)
+## Saver/Loader of BASIC programs (UART1600 SL V3.0, 1200 to 19200 bps)
 
 A separate, small program (like the SAVER/LOADER of the PC-1500): it puts two machine-language routines in the RAM that
 **send a BASIC program to the terminal (TeraTerm) and load it back**, as a binary file. It needs UART1600 only for the wiring
-(pins 27, 29, ground) and the same TTL partner, not as software: SL has its own bit routines, fixed at **19200 bps 8N1**.
+(pins 27, 29, ground) and the same TTL partner, not as software: SL has its own bit routines, **8N1 at 1200, 2400, 4800, 9600 (default and recommended) or 19200 bps**, chosen in the installer. 19200 is the fastest, the lower speeds are more reliable. The speed of the version V2.1 (`Basic/sl_v2.1.txt`, kept as a fallback) is fixed at 19200.
 
-1. Install it: type in or send `Basic/sl.txt` (36 lines, 1.8 KB, `DATA` with a checksum; keep it short: a PC-1600 receives only about 2 KB of text per `LOAD "COM1:"`) and `RUN`.
-   The installer has fixed addresses and asks nothing: **LOAD at `&C100` (49408) and SAVE at `&C200` (49664)**, 307 bytes in the
+1. Install it: type in or send `Basic/sl.txt` (48 lines, 2.2 KB, `DATA` with a checksum) and `RUN`.
+   The installer asks for the speed (`BAUD (ENTER=9600)`: 1200, 2400, 4800, 9600 or 19200) and calculates the delays of the bit routines for it
+   (the CPU is taken as 3.0 MHz). The addresses are fixed: **LOAD at `&C100` (49408) and SAVE at `&C200` (49664)**, about 330 bytes in the
    machine-language area (it checks that there is room: `F865H` must be at least 49780). It checks the pointers of the BASIC (`FE3CH`, `FE3FH`)
    and prints the two calls. **It replaces UART1600 if that is installed** (UART1600 uses `C0C5H` up to `C3C3H`). Then `NEW` (without an address)
    deletes the installer; the routines stay.
-2. **Save** (PC-1600 to the terminal or SerComet): the partner at 19200 8N1 (TeraTerm: start the log as a **binary** file; SerComet: Software UART),
+2. **Save** (PC-1600 to the terminal or SerComet): the partner at the same speed, 8N1 (TeraTerm: start the log as a **binary** file; SerComet: Software UART with the same speed in the Baud box),
    then type as a direct command (RUN mode) `CALL &C200` [ENTER]. The program is sent as it lies in the memory (the tokens),
    followed by one checksum byte. The file of SerComet is the `.img` (the same bytes without the checksum, like the Pocket Tools). With a variable,
    `X=0 : CALL &C200,X`, `X` = 1 when it is done.
@@ -263,9 +265,12 @@ A separate, small program (like the SAVER/LOADER of the PC-1500): it puts two ma
   memory empty (`FFH` at the start, both pointers = start), as `NEW` does. Without the marker the BASIC listed the rest of an older program.
   The routines themselves set both pointers.
 - In RUN mode one command per line: a line with two statements separated by `:` (`POKE ... : POKE ...`) was refused on the test machine.
-- The emulator test (`tools/verify_sl.py`): SAVE gives exactly the bytes of the program plus the checksum; LOAD takes the stream
-  without any gap at all phases and +-3 % of the speed, keeps the registers of the BASIC (also the alternate ones), and
-  reports the errors above.
+- The emulator test (`tools/verify_sl.py`) reads the code and the patch sites from the installer listing and calculates the delays as the
+  installer does, for 1200, 2400, 4800, 9600 and 19200 bps: SAVE gives exactly the bytes of the program plus the checksum and an ideal receiver reads it
+  within about -6 % to +4 % of the bit time; LOAD takes the stream at all phases, +-3 % of the speed (+-2 % at 19200: one step of the pad is 2.6 % of
+  a bit there) and with gaps, keeps the registers of the BASIC (also the alternate ones), and reports the errors above. The delays are the formulas
+  of UART1600 (`BIT = base + 16*N - 4*K`, bases 100 for SAVE and 99 for LOAD), whose timings were tried on a real PC-1600 at the speeds 300 to 38400 bps.
+  The SL V3.0 itself has been tested only in the emulator so far; V2.1 (19200 bps) has been used on the real machine.
 
 ## Rebuilding
 
