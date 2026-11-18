@@ -756,17 +756,25 @@ namespace UartSlTest
         }
 
         // end of transmission = silence: 0.8 s (software serial, SAVE sends without gaps), 3 s (RS-232 text)
-        // flashes per second of the arrows for a baud rate: 300 -> 0.5, 600 -> 1, 1200 -> 2, 2400 -> 3, 4800 -> 4, 9600 -> 5, 19200 -> 6, 28800 -> 7, 38400 -> 8
+        // flashes per 2 seconds of the arrows for a baud rate: 300 -> 1, 600 -> 2, 1200 -> 4, 2400 -> 6, 4800 -> 8, 9600 -> 9,
+        // 19200 -> 10, 28800 -> 11, above 28800 -> 12 (the frequency is the half of it)
         static double BlinkHz(int baud)
         {
-            return baud <= 300 ? 0.5 : baud <= 600 ? 1 : baud <= 1200 ? 2 : baud <= 2400 ? 3 : baud <= 4800 ? 4 : baud <= 9600 ? 5 : baud <= 19200 ? 6 : baud <= 28800 ? 7 : 8;
+            int n = baud <= 300 ? 1 : baud <= 600 ? 2 : baud <= 1200 ? 4 : baud <= 2400 ? 6 : baud <= 4800 ? 8 : baud <= 9600 ? 9 : baud <= 19200 ? 10 : baud <= 28800 ? 11 : 12;
+            return n / 2.0;
         }
 
         void BlinkTick(object sender, EventArgs e)
         {
             if (!(banner.Sending || banner.Receiving)) return;
             int baud = 9600;
-            try { baud = Baud; } catch { }
+            try
+            {
+                // the speed the port really runs at (every mode, also the Software UART); without a port the speed of the combo
+                var p = port;
+                baud = p != null && p.IsOpen ? p.BaudRate : Baud;
+            }
+            catch { }
             long half = (long)(500.0 / BlinkHz(baud));                // half of a period in ms
             bool on = (blinkWatch.ElapsedMilliseconds / half) % 2 == 0;
             if (banner.Blink != on) { banner.Blink = on; banner.Invalidate(); }
