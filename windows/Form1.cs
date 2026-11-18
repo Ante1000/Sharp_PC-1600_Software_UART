@@ -17,7 +17,7 @@ namespace UartSlTest
         readonly object rxLock = new object();
         int lastRx;
         volatile bool abortRequested;
-        bool sending, blinkPhase;
+        bool sending, blinkPhase, rxStartLogged;
         int lastRxAny, lastTxAny;     // time of the last received / sent data (also in the terminal)
         volatile bool rs232;
 
@@ -753,25 +753,30 @@ namespace UartSlTest
         void TimerTick(object sender, EventArgs e)
         {
             byte[] data = null;
-            bool receiving = false;
+            bool receiving = false, started = false;
             lock (rxLock)
             {
                 int quiet = unchecked(Environment.TickCount - lastRx);
                 receiving = rx.Count > 0;
+                if (receiving && !rxStartLogged) { rxStartLogged = true; started = true; }      // a transmission has begun
+                if (!receiving) rxStartLogged = false;
                 int eofAt = rs232 ? rx.IndexOf(0x1A) : -1;     // 1Ah = end-of-file code of an ASCII file: finish at once
                 if (eofAt >= 0)
                 {
                     data = rx.GetRange(0, eofAt).ToArray();
                     rx.Clear();
                     receiving = false;
+                    rxStartLogged = false;
                 }
                 else if (rx.Count > 0 && quiet > (rs232 ? 3000 : 800))
                 {
                     data = rx.ToArray();
                     rx.Clear();
                     receiving = false;
+                    rxStartLogged = false;
                 }
             }
+            if (started) Log("Start receiving ''");
             receiving |= unchecked(Environment.TickCount - lastRxAny) < 300;
             bool tx = sending || unchecked(Environment.TickCount - lastTxAny) < 300;
             blinkPhase = !blinkPhase;                      // timer tick = 100 ms -> 5 flashes per second
