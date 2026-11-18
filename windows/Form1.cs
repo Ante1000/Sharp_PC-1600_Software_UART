@@ -198,7 +198,7 @@ namespace UartSlTest
                     Left = x0 + 40, Top = 4 + (32 - ts.Height) / 2, Anchor = AnchorStyles.Top
                 });
                 // "by Alex F4VTS" to the right of the title, a round "?" button (About) on the left
-                var by = new Label { Text = "by Alex Matczewski F4VTS", AutoSize = true, Font = new Font("Segoe UI", 9F, FontStyle.Bold | FontStyle.Italic), ForeColor = Color.FromArgb(90, 110, 140), Left = x0 + 40 + ts.Width + 10, Top = 4 + (32 - ts.Height) / 2 + 3, Anchor = AnchorStyles.Top };
+                var by = new Label { Text = "by Alex F4VTS", AutoSize = true, Font = new Font("Segoe UI", 9F, FontStyle.Bold | FontStyle.Italic), ForeColor = Color.FromArgb(90, 110, 140), Left = x0 + 40 + ts.Width + 10, Top = 4 + (32 - ts.Height) / 2 + 3, Anchor = AnchorStyles.Top };
                 Controls.Add(by);
                 var about = new RoundHelpButton { Left = 10, Top = 9, Width = 21, Height = 21, Anchor = AnchorStyles.Top | AnchorStyles.Left };
                 about.Click += delegate { using (var d = new AboutForm()) d.ShowDialog(this); };
@@ -1574,7 +1574,7 @@ namespace UartSlTest
             Controls.Add(new PictureBox { Image = Icons.Comet(72), SizeMode = PictureBoxSizeMode.AutoSize, Left = (380 - 72) / 2, Top = 16 });
             AddLine("SerComet", 100, new Font("Segoe UI", 16F, FontStyle.Bold), Color.FromArgb(30, 70, 120));
             AddLine("File transfer tool for PC and Sharp pocket computers", 138, new Font("Segoe UI", 9F), Color.Black);
-            AddLine("Author: Alex F4VTS", 170, new Font("Segoe UI", 10F), Color.Black);
+            AddLine("Author: Alex Matczewski F4VTS", 170, new Font("Segoe UI", 10F), Color.Black);
             AddLine("Copyright \u00A9 2026", 194, new Font("Segoe UI", 10F), Color.Black);
             AddLine("License: GNU General Public License v3.0", 218, new Font("Segoe UI", 10F), Color.Black);
             AddLine("BASIC token tables: \"Das Systemhandbuch fuer den PC-1600\"", 266, new Font("Segoe UI", 8.5F), Color.Black);
