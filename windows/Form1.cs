@@ -165,6 +165,13 @@ namespace UartSlTest
             btnView = Btn("View", Icons.File(), 10, 518, 90, 24, TL);
             btnView.Enabled = false;
             gbFiles.Controls.Add(lstFiles);
+            // files dragged from the desktop / Explorer are copied to the current folder
+            foreach (Control dc in new Control[] { lstFiles, gbFiles })
+            {
+                dc.AllowDrop = true;
+                dc.DragEnter += (s2, e2) => { e2.Effect = e2.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None; };
+                dc.DragDrop += (s2, e2) => DropFiles(e2.Data.GetData(DataFormats.FileDrop) as string[]);
+            }
             btnSend = Btn("Send selected", Icons.Plane(), 585, 366, 125, 32, TR);
             btnSendOther = Btn("Send file...", Icons.File(), 585, 402, 125, 32, TR);
             btnRefreshFiles = Btn("Refresh list", Icons.Refresh(), 585, 438, 125, 32, TR);
@@ -643,6 +650,33 @@ namespace UartSlTest
             foreach (string p in SerialPort.GetPortNames()) comboPorts.Items.Add(p);
             if (cur != null && comboPorts.Items.Contains(cur)) comboPorts.SelectedItem = cur;
             else if (comboPorts.Items.Count > 0) comboPorts.SelectedIndex = 0;
+        }
+
+        void DropFiles(string[] files)
+        {
+            if (files == null) return;
+            if (!Directory.Exists(txtDir.Text)) { Log("Drop: folder does not exist: " + txtDir.Text); return; }
+            int n = 0;
+            foreach (string f in files)
+            {
+                try
+                {
+                    if (!File.Exists(f)) continue;
+                    string ext = Path.GetExtension(f).ToLowerInvariant();
+                    if (ext != ".bas" && ext != ".txt" && ext != ".img") { Log("Drop: skipped " + Path.GetFileName(f) + " (only .bas, .txt, .img)"); continue; }
+                    if (string.Equals(Path.GetDirectoryName(Path.GetFullPath(f)), Path.GetFullPath(txtDir.Text), StringComparison.OrdinalIgnoreCase)) continue;   // already there
+                    string dest = Path.Combine(txtDir.Text, Path.GetFileName(f));
+                    if (File.Exists(dest))
+                    {
+                        if (MessageBox.Show(this, Path.GetFileName(f) + " already exists in the folder. Overwrite?", "SerComet", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) continue;
+                    }
+                    File.Copy(f, dest, true);
+                    Log("Copied " + Path.GetFileName(f) + " to " + txtDir.Text);
+                    n++;
+                }
+                catch (Exception ex) { Log("Drop error: " + ex.Message); }
+            }
+            if (n > 0) RefreshFiles();
         }
 
         void RefreshFiles()
