@@ -34,7 +34,7 @@ def build():
     S = SAVE_AT - LOAD_AT
     ls = lambda name: lab[name] - lab['LOAD'] + 1          # in LOAD
     sv = lambda name: S + lab[name] + 1                    # in SAVE
-    add(10, 'REM SL V3.1: LOAD &C100, SAVE &C200')
+    add(10, 'REM SL V3.2: LOAD &C100, SAVE &C200')
     add(30, 'CLEAR:WAIT 0:BEEP OFF:A=%d' % LOAD_AT)
     # F865H/F866H = the start of the BASIC program in the notation of the PC-1500 (high byte first, bit 15 inverted). When the
     # program is in the internal RAM (C000H or more), the machine-language area ends there: it must hold both routines

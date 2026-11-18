@@ -52,7 +52,7 @@ def setup(r, pb=prog, start=START):
     mem[start:start + len(pb)] = bytes(pb)
     mem[0xFE3C] = start & 255; mem[0xFE3D] = start >> 8; mem[0xFE3E] = 4
     e = start + len(pb); mem[0xFE3F] = e & 255; mem[0xFE40] = e >> 8; mem[0xFE41] = 4
-    mem[0xF868] = e & 255; mem[0xF869] = e >> 8
+    mem[0xF867] = (e >> 8) ^ 0x80; mem[0xF868] = e & 255; mem[0xF869] = 0x77        # F867H/F868H: the end in the PC-1500 notation
     mem[e] = 0xFF
 stream = bytes(prog) + bytes([sum(prog) & 255])
 ok = True
@@ -90,7 +90,7 @@ for bd in (1200, 2400, 4800, 9600, 19200):
             i = P + LOAD; j = bytes(r.m.memory[i:i + 80]).find(bytes([0x0E, 0x00, 0x16, 30])); r.m.memory[i + j + 3] = 1
         r.run(); mem = r.m.memory
         return r, mem[0xFE3F] + 256 * mem[0xFE40]
-    def pe2(r): return r.m.memory[0xF868] + 256 * r.m.memory[0xF869]
+    def pe2(r): return ((r.m.memory[0xF867] ^ 0x80) << 8) + r.m.memory[0xF868]      # the end as the BASIC reads it (F869H is not touched)
     res = []
     lo, hi = (0.98, 1.02) if bd == 19200 else (0.97, 1.03)      # at 19200 one step of the pad is 2.6 % of the bit: +-2 % there
     for ph, gap, mult in ((0, 0, 1.0), (30, 0, 1.0), (10, 0, lo), (10, 0, hi), (20, 3, 1.0)):

@@ -60,7 +60,7 @@ used. According to the PC-1600 schematic and the Technical Reference the levels 
 | `wav/uart1600.wav` | tape recording of the program for `LOAD "CAS:UART1600"` (about 5 minutes) |
 | `tools/pc1600_bas2wav.py` | BASIC text -> tape recording (WAV) and decoder check (from the PC-1600 game repository); lines must not exceed 80 characters |
 | `Basic/pc1600_memfinder.txt`, `wav/pc1600_memfinder.wav` | diagnostic program: finds the BASIC program in the RAM and the pointers in the work area and sends a report through UART1600 (for a future Saver/Loader of BASIC programs) |
-| `Basic/sl.txt` | **Saver/Loader V3.1**: BASIC installer (49 lines, 2.3 KB) of the machine-language LOAD (`&C100`) and SAVE (`&C200`) of BASIC programs through the UART, 1200 to 19200 bps (ENTER = 9600) |
+| `Basic/sl.txt` | **Saver/Loader V3.2**: BASIC installer (49 lines, 2.3 KB) of the machine-language LOAD (`&C100`) and SAVE (`&C200`) of BASIC programs through the UART, 1200 to 19200 bps (ENTER = 9600) |
 | `Basic/sl_v2.1.txt`, `asm/uart1600_sl_v2.1.asm` | the previous version V2.1 (fixed 19200 bps): kept as a working fallback |
 | `asm/uart1600_sl.asm` | source of SAVE and LOAD (position independent, no buffer) |
 | `tools/build_sl.py`, `tools/verify_sl.py` | makes `Basic/sl.txt`; emulator test of SAVE and LOAD |
@@ -232,13 +232,13 @@ and the sender is read correctly by an ideal receiver between about -4 % and +4 
 | The machine-language area at `C0C5H` is at least 767 bytes long | to be checked with `STATUS 2` / `POKE` (see How to use); if it is shorter, the code overwrites the BASIC program |
 | Whether memory reads of `8000H`-`FFFFH` have side effects | assumed not (reads of ordinary RAM, ROM and card windows) |
 
-## Saver/Loader of BASIC programs (UART1600 SL V3.1, 1200 to 19200 bps)
+## Saver/Loader of BASIC programs (UART1600 SL V3.2, 1200 to 19200 bps)
 
 A separate, small program (like the SAVER/LOADER of the PC-1500): it puts two machine-language routines in the RAM that
 **send a BASIC program to the terminal (TeraTerm) and load it back**, as a binary file. It needs UART1600 only for the wiring
 (pins 27, 29, ground) and the same TTL partner, not as software: SL has its own bit routines, **8N1 at 1200, 2400, 4800, 9600 (default and recommended) or 19200 bps**, chosen in the installer. 19200 is the fastest, the lower speeds are more reliable. The speed of the version V2.1 (`Basic/sl_v2.1.txt`, kept as a fallback) is fixed at 19200.
 
-1. Install it: type in or send `Basic/sl.txt` (48 lines, 2.2 KB, `DATA` with a checksum) and `RUN`.
+1. Install it: type in or send `Basic/sl.txt` (49 lines, 2.3 KB, `DATA` with a checksum) and `RUN`.
    The installer asks for the speed (`BAUD (ENTER=9600)`: 1200, 2400, 4800, 9600 or 19200) and calculates the delays of the bit routines for it
    (the CPU is taken as 3.0 MHz). The addresses are fixed: **LOAD at `&C100` (49408) and SAVE at `&C200` (49664)**, about 330 bytes in the
    machine-language area (it checks that there is room when the BASIC program lies in the internal RAM: `F865H`/`F866H` hold the start of the BASIC program in the notation of the PC-1500, high byte first with bit 15 inverted, so the start is `(F865H xor 80H)*256 + F866H`, for example 80C5H for a module; the machine-language area ends there). It checks the start pointer of the BASIC (`FE3CH`)
@@ -259,8 +259,8 @@ A separate, small program (like the SAVER/LOADER of the PC-1500): it puts two ma
 - Limits: a program must lie in one 16 KB window (module `8000H`-`BFFFH`, or the internal RAM) and be shorter than 16 KB.
 - What the BASIC of the PC-1600 needs (found on a real machine with memory dumps): the program lies from the address in `FE3CH` (on the
   test machine `80C5H`) in lines `number (2 bytes, high first), length (1 byte: from the token to the CR), the line, 0DH`, **followed by
-  one byte `FFH` (the end marker)**. The end of the program is kept in **two** places, `FE3FH` and `F868H` (the address of the marker);
-  `STATUS 1` is the difference of the end and the start. SAVE sends the bytes from the start to the marker (not the marker). V3.1 finds the marker by walking along the lines (number, length, content) and does not use `FE3FH`: on a real PC-1600 with a large program (14.8 KB, loaded as text) `FE3FH` was 5 bytes **before** the start (`STATUS 1` = -5) and V3.0 sent 65 KB. FFH inside a line does not end the program, only FFH where a line number begins; it never goes beyond F000H.
+  one byte `FFH` (the end marker)**. The end of the program is kept in **two** places, `FE3FH`/`FE40H` (the address of the marker, low byte first) and `F867H`/`F868H` (the same address in the notation of the PC-1500, like `F865H`/`F866H` for the start: **high byte first, bit 15 inverted**); the BASIC makes `FE3FH` from `F867H`/`F868H`;
+  `STATUS 1` is the difference of the end and the start. SAVE sends the bytes from the start to the marker (not the marker). V3.1 and later find the marker by walking along the lines (number, length, content) and does not use `FE3FH`: on a real PC-1600 with a large program (14.8 KB, loaded as text) `FE3FH` was 5 bytes **before** the start (`STATUS 1` = -5) and V3.0 sent 65 KB. FFH inside a line does not end the program, only FFH where a line number begins; it never goes beyond F000H.
   LOAD stores the file from the start, writes the marker over the checksum byte and sets both pointers; after an error (2 or 4) it leaves the
   memory empty (`FFH` at the start, both pointers = start), as `NEW` does. Without the marker the BASIC listed the rest of an older program.
   The routines themselves set both pointers.
@@ -270,7 +270,7 @@ A separate, small program (like the SAVER/LOADER of the PC-1500): it puts two ma
   within about -6 % to +4 % of the bit time; LOAD takes the stream at all phases, +-3 % of the speed (+-2 % at 19200: one step of the pad is 2.6 % of
   a bit there) and with gaps, keeps the registers of the BASIC (also the alternate ones), and reports the errors above. The delays are the formulas
   of UART1600 (`BIT = base + 16*N - 4*K`, bases 100 for SAVE and 99 for LOAD), whose timings were tried on a real PC-1600 at the speeds 300 to 38400 bps.
-  The SL V3.1 itself has been tested only in the emulator so far (also with a wrong `FE3FH`); V2.1 (19200 bps) has been used on the real machine.
+  V3.2 fixes the end pointer after LOAD: the versions up to V3.1 wrote only `F868H` (the low byte) and the high byte of the old end stayed in `F867H`, so a program that ended on another 256-byte page than the previous one had a wrong end (`STATUS 1` negative, error 13 when a line was added; seen with a 6 KB test program: -11). The SL V3.2 itself has been tested only in the emulator so far (also with a wrong `FE3FH` and a stale `F867H`); V2.1 (19200 bps) has been used on the real machine.
 
 ## Rebuilding
 
