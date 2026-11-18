@@ -52,8 +52,11 @@ namespace UartSlTest
             LoadSettings();
             // restore the last port and target computer, and with it that computer's mode and transmission settings
             if (startPort != null && comboPorts.Items.Contains(startPort)) comboPorts.SelectedItem = startPort;
+            else if (startPort != null && comboPorts.SelectedItem != null)
+                Log("The saved port " + startPort + " is not available; the first available port " + comboPorts.SelectedItem + " is selected.");
             (startModel == 0 ? radio1500 : startModel == 2 ? radioOther : radio1600).Checked = true;
             SetTarget();
+            if (!File.Exists(SettingsFile())) SaveSettings();       // first start or the file was deleted: build it again
             Log("Ready. Select the port and click 'Open port'.");
         }
 
