@@ -1579,7 +1579,7 @@ namespace UartSlTest
             AddLine("License: GNU General Public License v3.0", 218, new Font("Segoe UI", 10F), Color.Black);
             AddLine("BASIC token tables: \"Das Systemhandbuch fuer den PC-1600\"", 266, new Font("Segoe UI", 8.5F), Color.Black);
             AddLine("by David von Oheimb. Thank you!", 286, new Font("Segoe UI", 8.5F), Color.Black);
-            AddLine("PC-1500 token table: \"Tips PC-1500\" document", 304, new Font("Segoe UI", 8.5F), Color.Black);
+            //AddLine("PC-1500 token table: \"Tips PC-1500\" document", 304, new Font("Segoe UI", 8.5F), Color.Black);
             var web = new LinkLabel { Text = "Web: github.com/Ante1000", Left = 0, Top = 242, Width = 380, Height = 20, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Segoe UI", 10F) };
             web.Links.Add(5, 19, "https://github.com/Ante1000");
             web.LinkClicked += delegate (object s, LinkLabelLinkClickedEventArgs e)
