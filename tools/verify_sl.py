@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Emulator test of Basic/uart1600_sl.txt (the Saver/Loader): stores the code as the BASIC installer does, then runs SAVE
+"""Emulator test of Basic/sl.txt (the Saver/Loader): stores the code as the BASIC installer does, then runs SAVE
 and LOAD against an ideal 19200 bps partner, with a sample program in a memory that has the BASIC pointers at FE3CH/FE3FH.
 The code is read from the DATA lines (z80asm is not needed). pip install z80
 Usage: python3 tools/verify_sl.py"""
@@ -7,7 +7,7 @@ import os, random, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import verify_listing as V
 ROOT = V.ROOT
-lines = V.load_listing(os.path.join(ROOT, 'Basic', 'uart1600_sl.txt'))
+lines = V.load_listing(os.path.join(ROOT, 'Basic', 'sl.txt'))
 st = V.Stream(lines, 1000)
 n = st.read(); img = bytearray(0x200); tot = 0
 for _ in range(n):
@@ -16,7 +16,7 @@ for _ in range(n):
     img[o:o + l] = bytes(bs); tot += sum(bs)
 assert st.read() == tot, 'checksum of the DATA lines'
 code = bytes(img)
-lab = {'SAVE': 0, 'LOAD': 176, 'sv_fin': 0x74, 'ld_fin': 0x188}
+lab = {'SAVE': 192, 'LOAD': 0, 'sv_fin': 192 + 0x74, 'ld_fin': 191}   # LOAD at &C100, SAVE at &C1C0 = 192 bytes behind it
 P = 0xC0C5
 img = bytearray(code)
 rnd=random.Random(5)
