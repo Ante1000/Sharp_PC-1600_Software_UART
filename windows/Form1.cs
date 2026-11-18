@@ -787,6 +787,11 @@ namespace UartSlTest
         {
             try
             {
+                if (rs232 && !LooksLikeProgramText(data))
+                {
+                    Log("Ignored " + data.Length + " B of noise (not a BASIC listing); nothing was saved.");
+                    return;
+                }
                 Directory.CreateDirectory(txtDir.Text);
                 if (rs232)
                 {
@@ -827,12 +832,36 @@ namespace UartSlTest
                 }
                 else
                 {
+                    if (data.Length < 16)       // a few random bytes on the line, not a transfer
+                    {
+                        Log("Ignored " + data.Length + " B of noise (" + err + "); nothing was saved.");
+                        return;
+                    }
                     string path = UniquePath("ERROR_" + DateTime.Now.ToString("yyyyMMdd_HHmmss"), ".bad");
                     File.WriteAllBytes(path, data);
                     Log("RECEIVE ERROR (" + err + "), " + data.Length + " B saved as " + Path.GetFileName(path) + ". Repeat SAVE.");
                 }
             }
             catch (Exception ex) { Log("Write error: " + ex.Message); }
+        }
+
+        // text received in the text modes is saved only when it looks like a program: mostly printable characters and at least one
+        // numbered BASIC line (or, without line numbers, a longer text); a few random bytes from the line are noise
+        static bool LooksLikeProgramText(byte[] d)
+        {
+            if (d.Length < 8) return false;
+            int printable = 0;
+            foreach (byte b in d) if ((b >= 32 && b < 127) || b == 9 || b == 10 || b == 13 || b == 26) printable++;
+            if (printable < d.Length * 0.85) return false;
+            string text = Encoding.GetEncoding(28591).GetString(d);
+            foreach (string line in text.Split('\n', '\r'))
+            {
+                string t = line.Trim();
+                int i = 0;
+                while (i < t.Length && char.IsDigit(t[i])) i++;
+                if (i > 0 && i < t.Length) return true;          // "10 PRINT ..."
+            }
+            return d.Length >= 64;
         }
 
         string UniquePath(string name, string ext)
