@@ -335,7 +335,7 @@ namespace UartSlTest
                 return "Into the PC-1600 (Send): INIT\"COM1:\",512 / SETCOM\"COM1:\",2400 / LOAD\"COM1:\" (same baud rate as in SerComet).\r\n" +
                        "From the PC-1600 (Receive): SAVE\"COM1:\",A. Text transfer (.bas); the file is saved after EOF (1Ah) or 3 s of silence.\r\n" +
                        "SETCOM\"COM1:\",2400,8,N,1,X,N switches XON/XOFF on in the Sharp (the default Flow of SerComet).";
-            return "Software serial: 19200 8N1, binary transfer (.img files). RECEIVE: on the PC-1600 run SAVE (CALL addr,X). The file is saved automatically, named after the first REM.\r\nSEND: run LOAD on the PC-1600 first (CALL addr+176,X), then press Send (30 s to start).";
+            return "Software serial: 19200 8N1, binary transfer (.img files). RECEIVE: on the PC-1600 type CALL &C1C0 (SAVE). The file is saved automatically, named after the first REM.\r\nSEND: type CALL &C100 (LOAD) on the PC-1600 first, then press Send (30 s to start).";
         }
 
         static string DefaultLocation(int i)
@@ -1050,7 +1050,7 @@ namespace UartSlTest
                     while (p.BytesToWrite > 0) System.Threading.Thread.Sleep(10);
                     report(100);
                 });
-                if (abortRequested) Log("Transmission aborted."); else Log(text ? "Sent." : "Sent. The PC-1600 finishes after 0.5 s of silence; check X=1 (PRINT X) and LIST.");
+                if (abortRequested) Log("Transmission aborted."); else Log(text ? "Sent." : "Sent. The PC-1600 finishes after 0.5 s of silence; check the program with LIST.");
             }
             catch (Exception ex) { Log("Send error: " + ex.Message); }
             finally

@@ -158,39 +158,23 @@ ld_st:
 ld_hl:
  dec d
  jr nz,ld_hl
- jr ld_hp
- nop
- nop
- nop
- nop
- nop
- nop
- nop
- nop
+ jr ld_hp              ; 12 T-states (the same time as before: the 8 NOPs behind it were never run)
 ld_hp:
  in a,(OPB)           ; middle of the start bit
  and 0x04
  xor 0x00
  jr nz,ld_next        ; line high again: it was a glitch
  ld b,8
- nop                  ; calibrated pad for the first bit
- nop
- nop
+ jr $+2               ; calibrated pad for the first bit: 16 T-states = JR (12) + NOP (4)
  nop
 ld_bit:
  ld d,4
 ld_dd:
  dec d
  jr nz,ld_dd
- jr $+4
- nop
- nop
- nop
- nop
- nop
- nop
- nop
- nop
+ jr $+2               ; 36 T-states in 6 bytes (before: JR + 6 NOPs run)
+ jr $+2
+ jr $+2
  in a,(OPB)           ; sample in the middle of the bit
  and 0x04
  xor 0x00
@@ -201,15 +185,9 @@ ld_dd:
 ld_d2:
  dec d
  jr nz,ld_d2
- jr $+4
- nop
- nop
- nop
- nop
- nop
- nop
- nop
- nop
+ jr $+2               ; 36 T-states
+ jr $+2
+ jr $+2
  ld (hl),c
  inc hl
  ex af,af'
@@ -245,11 +223,8 @@ ld_cnt:
  sub c                ; the sum of all minus twice the checksum byte = 0 when the checksum is right
  ld e,2
  jr nz,ld_bad         ; wrong checksum
- ld (hl),0xFF         ; the end marker of the program replaces the checksum byte
- ld (PE),hl           ; the end of the program = the place of the marker
- ld (PE2),hl
  ld e,1
- jr ld_exit
+ jr ld_fix            ; HL = the checksum byte: the end marker of the program replaces it
 ld_exit0:
  pop hl
  ld a,e
@@ -257,8 +232,9 @@ ld_exit0:
  jr z,ld_exit         ; nothing was received: the memory is untouched
 ld_bad:
  ld hl,(PS)           ; an error: the program area is left empty, as after NEW
- ld (hl),0xFF
- ld (PE),hl
+ld_fix:
+ ld (hl),0xFF         ; the end marker
+ ld (PE),hl           ; the end of the program = the place of the marker
  ld (PE2),hl
 ld_exit:
  ld d,0

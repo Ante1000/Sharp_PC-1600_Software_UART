@@ -60,9 +60,9 @@ used. According to the PC-1600 schematic and the Technical Reference the levels 
 | `wav/uart1600.wav` | tape recording of the program for `LOAD "CAS:UART1600"` (about 5 minutes) |
 | `tools/pc1600_bas2wav.py` | BASIC text -> tape recording (WAV) and decoder check (from the PC-1600 game repository); lines must not exceed 80 characters |
 | `Basic/pc1600_memfinder.txt`, `wav/pc1600_memfinder.wav` | diagnostic program: finds the BASIC program in the RAM and the pointers in the work area and sends a report through UART1600 (for a future Saver/Loader of BASIC programs) |
-| `Basic/uart1600_sl.txt` | **Saver/Loader**: BASIC installer (about 40 lines, 1.9 KB) of the machine-language SAVE and LOAD of BASIC programs through the UART, fixed 19200 bps |
+| `Basic/sl.txt` | **Saver/Loader**: BASIC installer (36 lines, 1.8 KB) of the machine-language LOAD (`&C100`) and SAVE (`&C1C0`) of BASIC programs through the UART, fixed 19200 bps |
 | `asm/uart1600_sl.asm` | source of SAVE and LOAD (position independent, no buffer) |
-| `tools/build_sl.py`, `tools/verify_sl.py` | makes `Basic/uart1600_sl.txt`; emulator test of SAVE and LOAD |
+| `tools/build_sl.py`, `tools/verify_sl.py` | makes `Basic/sl.txt`; emulator test of SAVE and LOAD |
 | `asm/uart1600.asm` | source of SEROUT, SERIN and PROBE (assembler: `z80asm`) with all comments |
 | `tools/build_loader.py` | makes `Basic/uart1600.txt` from `asm/uart1600.asm` (needs `z80asm`) |
 | `tools/verify_listing.py` | emulator test of the loader listing (needs `pip install z80` and `z80asm`) |
@@ -237,18 +237,19 @@ A separate, small program (like the SAVER/LOADER of the PC-1500): it puts two ma
 **send a BASIC program to the terminal (TeraTerm) and load it back**, as a binary file. It needs UART1600 only for the wiring
 (pins 27, 29, ground) and the same TTL partner, not as software: SL has its own bit routines, fixed at **19200 bps 8N1**.
 
-1. Install it: type in or send `Basic/uart1600_sl.txt` (about 40 lines, 1.9 KB, `DATA` with a checksum; keep it short: a PC-1600 receives only about 2 KB of text per `LOAD "COM1:"`), `RUN`, ENTER for the ML address
-   (49349 = `C0C5H`; the code is about 370 bytes and **replaces UART1600 if it is at the same address**: give another address,
-   e.g. 50200, when both are wanted). The program checks the pointers of the BASIC (`FE3CH`, `FE3FH`) and shows the addresses:
-   `SAVE: CALL A,X` and `LOAD: CALL A+176,X`. Then `NEW` (without an address) deletes the installer; the routines stay.
-2. **Save** (PC-1600 to the terminal): in TeraTerm start the log as a **binary** file (File, Log..., tick "Binary"), the terminal at 19200 8N1,
-   then type as a direct command (RUN mode) `X=0 : CALL 49349,X` [ENTER]. The program is sent as it lies in the memory (the tokens),
-   followed by one checksum byte. `X` = 1 when it is done. Stop the log. The name of the file is yours; the text of the first `REM`
-   line is inside the file and can help (a hex viewer shows it).
-3. **Load** (terminal to the PC-1600): type `NEW` (the memory must be empty or hold the program that is to be replaced), then `X=0 : CALL 49525,X`
-   (`A+176`) [ENTER] and within 30 s send the file: File, Send file..., tick **"Binary"**, transmit delay 0. The end of the file is
-   0.5 s without a byte. `X`: 1 = loaded and the end pointer set, 2 = checksum error, 3 = nothing received, 4 = does not fit.
-   Then `LIST` or `RUN`.
+1. Install it: type in or send `Basic/sl.txt` (36 lines, 1.8 KB, `DATA` with a checksum; keep it short: a PC-1600 receives only about 2 KB of text per `LOAD "COM1:"`) and `RUN`.
+   The installer has fixed addresses and asks nothing: **LOAD at `&C100` (49408) and SAVE at `&C1C0` (49600)**, 307 bytes in the
+   machine-language area (it checks that there is room: `F865H` must be at least 49716). It checks the pointers of the BASIC (`FE3CH`, `FE3FH`)
+   and prints the two calls. **It replaces UART1600 if that is installed** (UART1600 uses `C0C5H` up to `C3C3H`). Then `NEW` (without an address)
+   deletes the installer; the routines stay.
+2. **Save** (PC-1600 to the terminal or SerComet): the partner at 19200 8N1 (TeraTerm: start the log as a **binary** file; SerComet: Software UART),
+   then type as a direct command (RUN mode) `CALL &C1C0` [ENTER]. The program is sent as it lies in the memory (the tokens),
+   followed by one checksum byte. The file of SerComet is the `.img` (the same bytes without the checksum, like the Pocket Tools). With a variable,
+   `X=0 : CALL &C1C0,X`, `X` = 1 when it is done.
+3. **Load** (terminal or SerComet to the PC-1600): type `NEW` (the memory must be empty or hold the program that is to be replaced), then `CALL &C100` [ENTER]
+   and within 30 s send the file (TeraTerm: File, Send file..., tick **"Binary"**, transmit delay 0; SerComet: Send). The end of the file is
+   0.5 s without a byte. With a variable, `X=0 : CALL &C100,X`: 1 = loaded and the end pointer set, 2 = checksum error, 3 = nothing received,
+   4 = does not fit. Then `LIST` or `RUN` (a program that was not loaded properly leaves the memory empty).
 - **A program (BASIC) in memory is replaced**, not merged: the new program starts where the old one started. After an error (2 or 4)
   the memory holds a part of a program: do `NEW` (and, if the BASIC misbehaves, ALL RESET, which erases the memory). **Keep a copy of
   the programs on tape before the first try.**
