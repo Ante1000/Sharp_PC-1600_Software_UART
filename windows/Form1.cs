@@ -320,13 +320,20 @@ namespace UartSlTest
         string HintText()
         {
             if (radioSio.Checked)
-                return "Compatible models: PC-1350, PC-1360, PC-1450..90, PC-E500..650 series, PC-U6000, PC-2500 with 15-pin connector, TTL-UART SIO through a USB/COM adapter (like TeraTerm), text transfer (.bas files). RECEIVE: send the program as text, the file is saved after 3 s of silence. SEND: start receiving on the pocket computer, then press Send.";
+                return "Compatible: PC-1350, PC-1360, PC-1450..90, PC-E500..650, PC-U6000, PC-2500 (15-pin, TTL-UART SIO via a USB/COM adapter).\r\n" +
+                       "PC-E500(S): OPEN\"9600,N,8,1,A,L,&H1A,N,N\" : CLOSE, then LOAD\"COM:\" (Send) or SAVE\"COM:\" (Receive) (to verify).\r\n" +
+                       "PC-1360: OPEN\"1200,N,8,1,A,C,&40\" (or &1A, &26: to verify), then LOAD / SAVE (to verify).\r\n" +
+                       "Text transfer (.bas); the file is saved after EOF (1Ah) or 3 s of silence.";
             if (radio1500.Checked && radioRs.Checked)
-                return "PC-1500 with the CE-158(X) RS-232 interface, text transfer (.bas files), same baud rate on both sides. RECEIVE: the file is saved after 3 s of silence, named after the first REM line.\r\nSEND: start receiving on the PC-1500 first, then press Send. Lines are sent one by one with the delay set above.";
+                return "Into the PC-1500 with CE-158(X) (Send): SETDEV U1,CO,CI then CLOAD a (to verify). Same baud rate (SETCOM) as in SerComet.\r\n" +
+                       "From the PC-1500 (Receive): SETDEV U1,CO,CI then CSAVE a (to verify; CSAVE needs CO set by SETDEV, one more CR follows).\r\n" +
+                       "Text transfer (.bas); the file is saved after EOF (1Ah) or 3 s of silence.";
             if (radio1500.Checked)
                 return "PC-1500 software serial (Saver/Loader for the PC-1500) is not implemented yet. Use RS-232 - CE-158(X).";
             if (radioRs.Checked)
-                return "RS-232 serial port of the PC-1600, text transfer (.bas files), same baud rate on both sides. RECEIVE: send the program as text from the PC-1600. The file is saved after 3 s of silence, named after the first REM line.\r\nSEND: start receiving on the PC-1600 first, then press Send. Lines are sent one by one with the delay set above.";
+                return "Into the PC-1600 (Send): INIT\"COM1:\",512 / SETCOM\"COM1:\",2400 / LOAD\"COM1:\" (same baud rate as in SerComet).\r\n" +
+                       "From the PC-1600 (Receive): SAVE\"COM1:\",A. Text transfer (.bas); the file is saved after EOF (1Ah) or 3 s of silence.\r\n" +
+                       "SETCOM\"COM1:\",2400,8,N,1,X,N switches XON/XOFF on in the Sharp (the default Flow of SerComet).";
             return "Software serial: 19200 8N1, binary transfer (.img files). RECEIVE: on the PC-1600 run SAVE (CALL addr,X). The file is saved automatically, named after the first REM.\r\nSEND: run LOAD on the PC-1600 first (CALL addr+176,X), then press Send (30 s to start).";
         }
 
