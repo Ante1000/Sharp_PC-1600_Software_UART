@@ -1581,9 +1581,9 @@ namespace UartSlTest
 
             Controls.Add(new PictureBox { Image = Icons.Comet(72), SizeMode = PictureBoxSizeMode.AutoSize, Left = (380 - 72) / 2, Top = 16 });
             AddLine("SerComet", 100, new Font("Segoe UI", 16F, FontStyle.Bold), Color.FromArgb(30, 70, 120));
-            AddLine("File transfer tool for PC and Sharp pocket computers", 138, new Font("Segoe UI", 10.5F), Color.Black);
-            AddLine("Author: Alex Matczewski F4VTS", 170, new Font("Segoe UI", 10F, FontStyle.Bold), Color.Black);
-            AddLine("Copyright \u00A9 2026", 194, new Font("Segoe UI", 10F, FontStyle.Bold), Color.Black);
+            AddLine("File transfer tool for PC and Sharp pocket computers", 138, new Font("Segoe UI", 10F, FontStyle.Bold), Color.Black);
+            AddLine("Author: Alex Matczewski F4VTS", 170, new Font("Segoe UI", 9.5F, FontStyle.Bold), Color.Black);
+            AddLine("Copyright \u00A9 2026", 194, new Font("Segoe UI", 9.5F, FontStyle.Bold), Color.Black);
             AddLine("License: GNU General Public License v3.0", 218, new Font("Segoe UI", 8.5F), Color.Black);
             AddLine("BASIC token tables: \"Das Systemhandbuch f\u00FCr den PC-1600\"", 266, new Font("Segoe UI", 8.5F), Color.Black);
             AddLine("by David von Oheimb. Thank you!", 286, new Font("Segoe UI", 8.5F), Color.Black);
