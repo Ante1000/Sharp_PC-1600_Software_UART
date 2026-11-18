@@ -16,7 +16,7 @@ for _ in range(n):
     img[o:o + l] = bytes(bs); tot += sum(bs)
 assert st.read() == tot, 'checksum of the DATA lines'
 code = bytes(img)
-lab = {'SAVE': 192, 'LOAD': 0, 'sv_fin': 192 + 0x74, 'ld_fin': 191}   # LOAD at &C100, SAVE at &C1C0 = 192 bytes behind it
+lab = {'SAVE': 256, 'LOAD': 0, 'sv_fin': 256 + 0x74, 'ld_fin': 191}   # LOAD at &C100, SAVE at &C200 = 256 bytes behind it
 P = 0xC0C5
 img = bytearray(code)
 rnd=random.Random(5)

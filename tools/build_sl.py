@@ -21,16 +21,16 @@ def assemble():
 
 def build():
     code, lab = assemble()
-    # fixed places: LOAD (receive into the PC-1600) at &C100 = 49408, SAVE (send from the PC-1600) at &C1C0 = 49600.
+    # fixed places: LOAD (receive into the PC-1600) at &C100 = 49408, SAVE (send from the PC-1600) at &C200 = 49664.
     # The code is position independent; the offsets are relative to 49408. LOAD (191 bytes) must end before SAVE.
-    LOAD_AT, SAVE_AT = 0xC100, 0xC1C0
+    LOAD_AT, SAVE_AT = 0xC100, 0xC200
     assert lab['ld_fin'] - lab['LOAD'] <= SAVE_AT - LOAD_AT
     segs = [(lab['LOAD'], lab['ld_fin'], 0), (0, lab['sv_fin'], SAVE_AT - LOAD_AT)]    # (source from, to, offset in the PC-1600)
     L = []
 
     def add(n, t):
         L.append((n, t))
-    add(10, 'REM SL V2.0: LOAD &C100, SAVE &C1C0')
+    add(10, 'REM SL V2.1: LOAD &C100, SAVE &C200')
     add(30, 'CLEAR:WAIT 0:BEEP OFF:A=%d' % LOAD_AT)
     add(40, 'IF PEEK(63589)+256*PEEK(63590)<A+%d THEN PRINT "NO ROOM":BEEP 3:END' % (SAVE_AT - LOAD_AT + (segs[1][1] - segs[1][0])))
     add(70, 'RESTORE 1000:READ N:C=0')
@@ -43,7 +43,7 @@ def build():
     add(140, 'IF Q<P OR P<32768 THEN GOTO 910')
     add(150, 'CLS:PRINT "SL READY"')
     add(160, 'PRINT "LOAD (to PC-1600): CALL &C100"')
-    add(170, 'PRINT "SAVE (from PC-1600): CALL &C1C0"')
+    add(170, 'PRINT "SAVE (from PC-1600): CALL &C200"')
     add(190, 'END')
     add(900, 'PRINT "DATA ERROR":BEEP 3:END')
     add(910, 'PRINT "POINTERS?":BEEP 3:END')
@@ -76,4 +76,4 @@ if __name__ == '__main__':
     text, code, lab = build()
     open(os.path.join(ROOT, 'Basic', 'sl.txt'), 'w', newline='\n').write(text)
     print('Basic/sl.txt written;', len(text.splitlines()), 'lines,', len(text), 'bytes, longest', max(len(l) for l in text.splitlines()),
-          '; LOAD at &C100, SAVE at &C1C0')
+          '; LOAD at &C100, SAVE at &C200')

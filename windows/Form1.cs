@@ -335,7 +335,7 @@ namespace UartSlTest
                 return "Into the PC-1600 (Send): INIT\"COM1:\",512 / SETCOM\"COM1:\",2400 / LOAD\"COM1:\" (same baud rate as in SerComet).\r\n" +
                        "From the PC-1600 (Receive): SAVE\"COM1:\",A. Text transfer (.bas); the file is saved after EOF (1Ah) or 3 s of silence.\r\n" +
                        "SETCOM\"COM1:\",2400,8,N,1,X,N switches XON/XOFF on in the Sharp (the default Flow of SerComet).";
-            return "Software serial: 19200 8N1, binary transfer (.img files). RECEIVE: on the PC-1600 type CALL &C1C0 (SAVE). The file is saved automatically, named after the first REM.\r\nSEND: type CALL &C100 (LOAD) on the PC-1600 first, then press Send (30 s to start).";
+            return "Software serial: 19200 8N1, binary transfer (.img files). RECEIVE: on the PC-1600 type CALL &C200 (SAVE). The file is saved automatically, named after the first REM.\r\nSEND: type CALL &C100 (LOAD) on the PC-1600 first, then press Send (30 s to start).";
         }
 
         static string DefaultLocation(int i)
