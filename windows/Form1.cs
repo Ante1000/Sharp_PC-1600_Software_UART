@@ -808,9 +808,21 @@ namespace UartSlTest
                     return;
                 }
                 string err;
-                if (ProgImage.CheckStream(data, out err))
+                byte[] img = null;
+                string recovered = null;
+                if (ProgImage.CheckStream(data, out err)) img = ProgImage.ImageFromStream(data);
+                else
                 {
-                    byte[] img = ProgImage.ImageFromStream(data);
+                    // the Sharp sent more than the program (a wrong end pointer): the program ends at its end marker FFh
+                    byte[] sal;
+                    if (data.Length >= 16 && ProgImage.Salvage(data, out sal))
+                    {
+                        img = sal;
+                        recovered = "the Sharp sent " + data.Length + " B but the program is " + sal.Length + " B up to its end marker (FFh); the rest was dropped. Check the end pointer on the Sharp";
+                    }
+                }
+                if (img != null)
+                {
                     string name = SharpBase(ProgImage.NameFromRem(img));
                     string path = null;
                     string note = "";
@@ -832,7 +844,8 @@ namespace UartSlTest
                         path = UniqueSharp(name, ".img");
                         File.WriteAllBytes(path, img);
                     }
-                    Log("RECEIVED " + data.Length + " B, " + ProgImage.CountLines(img) + " lines, checksum OK -> " + Path.GetFileName(path) + note);
+                    if (recovered == null) Log("RECEIVED " + data.Length + " B, " + ProgImage.CountLines(img) + " lines, checksum OK -> " + Path.GetFileName(path) + note);
+                    else Log("RECOVERED " + ProgImage.CountLines(img) + " lines, " + img.Length + " B -> " + Path.GetFileName(path) + note + " (" + recovered + ").");
                     RefreshFiles();
                 }
                 else
@@ -1200,6 +1213,23 @@ namespace UartSlTest
             var img = new byte[n];
             Array.Copy(s, img, n);
             return CheckImage(img, out err);
+        }
+
+        // a stream that is not an image + checksum: the lines up to an end marker FFh (at the place of a line number) are the program
+        public static bool Salvage(byte[] s, out byte[] img)
+        {
+            img = null;
+            int p = 0, lines = 0;
+            while (p + 3 <= s.Length && s[p] != 0xFF)
+            {
+                int len = s[p + 2];
+                if (len < 2 || p + 3 + len > s.Length || s[p + 2 + len] != 0x0D) return false;
+                p += 3 + len; lines++;
+            }
+            if (lines == 0 || p >= s.Length || s[p] != 0xFF) return false;
+            img = new byte[p];
+            Array.Copy(s, img, p);
+            return true;
         }
 
         public static byte[] ImageFromStream(byte[] s)
