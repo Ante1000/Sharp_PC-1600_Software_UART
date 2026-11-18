@@ -298,7 +298,7 @@ namespace UartSlTest
             timer.Tick += TimerTick;
             timer.Start();
             // the arrows flash with a frequency that depends on the baud rate (a fast timer: the 100 ms tick is too slow for 6 to 8 Hz)
-            blinkTimer = new Timer { Interval = 20 };
+            blinkTimer = new Timer { Interval = 40 };
             blinkTimer.Tick += BlinkTick;
             blinkTimer.Start();
         }
@@ -756,11 +756,11 @@ namespace UartSlTest
         }
 
         // end of transmission = silence: 0.8 s (software serial, SAVE sends without gaps), 3 s (RS-232 text)
-        // flashes per 2 seconds of the arrows for a baud rate: 300 -> 1, 600 -> 2, 1200 -> 4, 2400 -> 6, 4800 -> 8, 9600 -> 9,
-        // 19200 -> 10, 28800 -> 11, above 28800 -> 12 (the frequency is the half of it)
+        // flashes per 2 seconds of the arrows for a baud rate: 300 -> 1, 600 -> 2, 1200 -> 3, 2400 -> 4, 4800 -> 5, 9600 -> 6,
+        // 19200 -> 8, 28800 -> 10, above 28800 -> 11
         static double BlinkHz(int baud)
         {
-            int n = baud <= 300 ? 1 : baud <= 600 ? 2 : baud <= 1200 ? 4 : baud <= 2400 ? 6 : baud <= 4800 ? 8 : baud <= 9600 ? 9 : baud <= 19200 ? 10 : baud <= 28800 ? 11 : 12;
+            int n = baud <= 300 ? 1 : baud <= 600 ? 2 : baud <= 1200 ? 3 : baud <= 2400 ? 4 : baud <= 4800 ? 5 : baud <= 9600 ? 6 : baud <= 19200 ? 8 : baud <= 28800 ? 10 : 11;
             return n / 2.0;
         }
 
