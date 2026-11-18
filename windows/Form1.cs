@@ -1148,11 +1148,21 @@ namespace UartSlTest
                     p.DiscardInBuffer();
                     if (!text)
                     {
-                        p.Write(data, 0, data.Length);
+                        // in small pieces: Abort stops between two pieces, without an aborted Write (the receiver of the Sharp
+                        // does not mind small gaps: it waits up to 0.5 s for the next byte)
+                        int off = 0;
+                        while (off < data.Length && !abortRequested)
+                        {
+                            int len = Math.Min(128, data.Length - off);
+                            p.Write(data, off, len);
+                            off += len;
+                            while (p.BytesToWrite > 256 && !abortRequested) System.Threading.Thread.Sleep(5);
+                            report(100 * Math.Max(0, off - p.BytesToWrite) / total);
+                        }
                         while (p.BytesToWrite > 0 && !abortRequested)
                         {
-                            report(100 * (total - p.BytesToWrite) / total);
-                            System.Threading.Thread.Sleep(50);
+                            report(100 * Math.Max(0, total - p.BytesToWrite) / total);
+                            System.Threading.Thread.Sleep(20);
                         }
                     }
                     else
