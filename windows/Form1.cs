@@ -757,10 +757,10 @@ namespace UartSlTest
 
         // end of transmission = silence: 0.8 s (software serial, SAVE sends without gaps), 3 s (RS-232 text)
         // flashes per 2 seconds of the arrows for a baud rate: 300 -> 1, 600 -> 2, 1200 -> 3, 2400 -> 4, 4800 -> 5, 9600 -> 6,
-        // 19200 -> 8, 28800 -> 10, above 28800 -> 11
+        // 19200 -> 8, above 19200 -> 10
         static double BlinkHz(int baud)
         {
-            int n = baud <= 300 ? 1 : baud <= 600 ? 2 : baud <= 1200 ? 3 : baud <= 2400 ? 4 : baud <= 4800 ? 5 : baud <= 9600 ? 6 : baud <= 19200 ? 8 : baud <= 28800 ? 10 : 11;
+            int n = baud <= 300 ? 1 : baud <= 600 ? 2 : baud <= 1200 ? 3 : baud <= 2400 ? 4 : baud <= 4800 ? 5 : baud <= 9600 ? 6 : baud <= 19200 ? 8 : 10;
             return n / 2.0;
         }
 
