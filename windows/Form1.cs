@@ -203,7 +203,7 @@ namespace UartSlTest
             }
 
 
-            btnRefresh.Click += delegate { RefreshPorts(); };
+            btnRefresh.Click += delegate { if (port != null) FlushBuffers(); else RefreshPorts(); };
             btnOpen.Click += delegate { TogglePort(); };
             radioSoft.CheckedChanged += delegate { UpdateMode(); };
             radioRs.CheckedChanged += delegate { UpdateMode(); };
@@ -628,6 +628,7 @@ namespace UartSlTest
                 port.Open();
                 btnOpen.Text = "Close port";
                 btnOpen.Image = Icons.Cross();
+                SetRefreshMode(true);
                 SetStatus(true);
                 Log("Port " + name + " open (" + port.BaudRate + " 8N1).");
             }
@@ -638,6 +639,27 @@ namespace UartSlTest
             }
         }
 
+        // the port is open: the button is "Flush"; closed: "Refresh" (re-scan of the ports)
+        void SetRefreshMode(bool open)
+        {
+            btnRefresh.Text = open ? "Flush" : "Refresh";
+            btnRefresh.Image = open ? Icons.Cross() : Icons.Refresh();
+            tips.SetToolTip(btnRefresh, open
+                ? "Flush: discard the data waiting in the port buffers and in the receive buffer. Use it before a transfer, after an interrupted transfer, and after the Sharp was switched on or reset (it may have sent garbage)."
+                : "Re-scan the list of available COM ports.");
+        }
+
+        void FlushBuffers()
+        {
+            try
+            {
+                if (port != null && port.IsOpen) { port.DiscardInBuffer(); port.DiscardOutBuffer(); }
+                lock (rxLock) { rx.Clear(); }
+                Log("Flush: the port buffers and the receive buffer were cleared.");
+            }
+            catch (Exception ex) { Log("Flush error: " + ex.Message); }
+        }
+
         void ClosePort()
         {
             if (port == null) return;
@@ -646,6 +668,7 @@ namespace UartSlTest
             port = null;
             btnOpen.Text = "Open port";
             btnOpen.Image = Icons.Plug();
+            SetRefreshMode(false);
             banner.PortOpen = false;
             banner.Invalidate();
             led.IsOpen = false;
