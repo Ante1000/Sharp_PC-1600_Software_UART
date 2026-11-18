@@ -46,6 +46,7 @@ namespace UartSlTest
             InitializeComponent();
             try { Icon = Icons.AppIcon(); } catch { }
             BuildUi();
+            SetRefreshMode(false);
             FormClosing += delegate { SaveSettings(); ClosePort(); };
             RefreshPorts();
             UpdateMode();
@@ -646,7 +647,9 @@ namespace UartSlTest
         void SetRefreshMode(bool open)
         {
             btnRefresh.Text = open ? "Flush" : "Refresh";
-            btnRefresh.Image = open ? Icons.Cross() : Icons.Refresh();
+            btnRefresh.Image = open ? Icons.Flush() : Icons.Refresh();
+            btnRefresh.TextAlign = ContentAlignment.MiddleCenter;          // centred in the space right of the icon
+            btnRefresh.Padding = new Padding(22, 0, 0, 0);
             tips.SetToolTip(btnRefresh, open
                 ? "Flush: discard the data waiting in the port buffers and in the receive buffer. Use it before a transfer, after an interrupted transfer, and after the Sharp was switched on or reset (it may have sent garbage)."
                 : "Re-scan the list of available COM ports.");
@@ -1186,6 +1189,7 @@ namespace UartSlTest
         public static Bitmap Cross() { return Make((g, p, b) => { g.DrawLine(p, 5, 5, 15, 15); g.DrawLine(p, 15, 5, 5, 15); }); }
         public static Bitmap Folder() { return Make((g, p, b) => { g.FillRectangle(b, 2, 6, 16, 11); g.FillRectangle(b, 2, 4, 7, 3); }); }
         public static Bitmap Terminal() { return Make((g, p, b) => { g.DrawRectangle(p, 2, 3, 16, 13); g.DrawLine(p, 5, 7, 8, 10); g.DrawLine(p, 5, 13, 8, 10); g.DrawLine(p, 10, 13, 14, 13); }); }
+        public static Bitmap Flush() { return Make((g, p, b) => { g.FillPolygon(b, new[] { new Point(3, 3), new Point(17, 3), new Point(11, 10), new Point(11, 14), new Point(9, 14), new Point(9, 10) }); g.FillEllipse(b, 8, 15, 4, 4); }); }   // funnel + drop
         public static Bitmap Plane() { return Make((g, p, b) => { g.FillPolygon(b, new[] { new Point(2, 10), new Point(18, 3), new Point(13, 17), new Point(10, 12) }); }); }
         public static Bitmap File() { return Make((g, p, b) => { g.DrawRectangle(p, 5, 2, 10, 16); g.DrawLine(p, 8, 8, 12, 8); g.DrawLine(p, 8, 12, 12, 12); }); }
         // shooting star (yellow star head, curved light-blue forked tail) on a navy sky, drawn at any size
