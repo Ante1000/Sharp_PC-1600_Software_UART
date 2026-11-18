@@ -65,6 +65,7 @@ used. According to the PC-1600 schematic and the Technical Reference the levels 
 | `asm/uart1600_sl.asm` | source of SAVE and LOAD (position independent, no buffer) |
 | `tools/build_sl.py`, `tools/verify_sl.py` | makes `Basic/sl.txt`; emulator test of SAVE and LOAD |
 | `Basic/sl1500.txt` | **Saver/Loader for the PC-1500(A)** (4800 bps, see [below](#saver-loader-for-the-pc-1500a-4800-bps)): BASIC installer (34 lines, 1.8 KB) of the machine-language LOAD and SAVE |
+| `wav/sl1500.wav` | tape recording of `Basic/sl1500.txt` for the PC-1500 (`CLOAD` with the CE-150, name `SL1500`, about 2 minutes, 44.1 kHz mono); made with `bin2wav` from the tokenized program and checked by decoding it back with `wav2bin` (identical image) |
 | `asm/uart1500_sl.asm`, `tools/lh5801asm.py`, `tools/build_sl1500.py`, `tools/verify_sl1500.py` | source of the PC-1500 SL, a small LH5801 assembler, the installer builder and the simulator test |
 | `asm/uart1600.asm` | source of SEROUT, SERIN and PROBE (assembler: `z80asm`) with all comments |
 | `tools/build_loader.py` | makes `Basic/uart1600.txt` from `asm/uart1600.asm` (needs `z80asm`) |
@@ -284,7 +285,7 @@ tokenize, as BASIC text). The bit routines are those of UART7.3 v6.2 (tested on 
 handling is new: the program is sent / received directly from / into the program memory.
 
 1. Install it: switch to PRO mode, type `NEW0` and `NEW &4200` (RAM start + `&200`; on a PC-1500A with the RAM from `&4000`; other RAM: `PEEK &7863` = high byte of the RAM start,
-   see [HELP_NEW_memory.md](https://github.com/Ante1000/Sharp_PC-1500_Software_UART/blob/main/HELP_NEW_memory.md)), then type in or `CLOAD` `Basic/sl1500.txt` (34 lines, 1.8 KB as text, 1.6 KB in the memory, `DATA` with a checksum; so a PC-1500A or a RAM module: a bare 2 KB PC-1500 has only 1.5 KB from `&4200`) and `RUN`.
+   see [HELP_NEW_memory.md](https://github.com/Ante1000/Sharp_PC-1500_Software_UART/blob/main/HELP_NEW_memory.md)), then type in `Basic/sl1500.txt` or load it from the tape recording `wav/sl1500.wav` (`CLOAD`, CE-150) (34 lines, 1.8 KB as text, 1.6 KB in the memory, `DATA` with a checksum; so a PC-1500A or a RAM module: a bare 2 KB PC-1500 has only 1.5 KB from `&4200`) and `RUN`.
    It asks for the RX port (ENTER = PB2, `0` = PB0), POKEs the 312 bytes, checks them and prints the two calls. The code lies from RAM start + `&C5`:
    **LOAD at `&40C5` (16581) and SAVE at `&4184` (16772)**, ending at `&41FC`. Then `NEW` (in PRO mode) deletes the installer; the routines stay.
 2. **Save** (PC-1500 to SerComet, Software UART, target PC-1500, 4800): RUN mode, `CALL &4184` [ENTER] (or `X=0 : CALL &4184,X`: `X` = 1 when done).
