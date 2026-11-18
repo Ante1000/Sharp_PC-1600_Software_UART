@@ -38,9 +38,14 @@ def image(bd):
 
 P = 0xC100
 rnd = random.Random(5)
-prog = bytearray(bytes([0, 10, 70, 241, 171, 32]) + b'MYPROG.TEST REM TEXT' + b'\r')
-for k in range(20, 200, 10): prog += bytes([k >> 8, k & 255, 12]) + bytes(rnd.randrange(32, 126) for _ in range(10)) + b'\r'
-prog[100] = 0xFF; prog[101] = 0xFF; prog[102] = 0
+prog = bytearray()
+def line(no, content):          # a valid line: number (high byte first), length (token to CR), content, CR
+    global prog
+    prog += bytes([no >> 8, no & 255, len(content) + 1]) + bytes(content) + b'\r'
+line(10, [241, 171] + list(b'MYPROG.TEST REM TEXT'))
+for k in range(20, 200, 10):
+    line(k, [rnd.randrange(32, 126) for _ in range(10)])
+line(95, [0x41, 0xFF, 0xFF, 0x00, 0x42, 0xFF])     # FFH inside a line does not end the program: only FFH where a line number begins
 START = 0x80C5; END = START + len(prog)
 def setup(r, pb=prog, start=START):
     mem = r.m.memory
@@ -51,7 +56,7 @@ def setup(r, pb=prog, start=START):
     mem[e] = 0xFF
 stream = bytes(prog) + bytes([sum(prog) & 255])
 ok = True
-print('code from the DATA lines; program %d bytes; LOAD %d bytes at +0, SAVE 116 bytes at +256' % (len(prog), n and len(base)))
+print('code from the DATA lines; program %d bytes; LOAD at +0, SAVE at +256' % len(prog))
 for bd in (1200, 2400, 4800, 9600, 19200):
     img = image(bd); bit = V.FCLK / bd
     # SAVE
@@ -60,6 +65,15 @@ for bd in (1200, 2400, 4800, 9600, 19200):
     r.run()
     dec = V.decode(r.outs, bit); got = bytes(v for v, s in dec)
     good = got == stream and all(s == 1 for v, s in dec) and r.m.de == 1 and r.opc == 0x80
+    # SAVE finds the end of the program from the end marker, not from FE3FH: a wrong end pointer (5 bytes before the start, as seen on
+    # a real PC-1600 with a large program: STATUS 1 = -5) and an empty program
+    r2 = V.Rig(img, SAVE, 0, P); setup(r2); r2.opc = 0x80
+    r2.m.memory[0xFE3F] = (START - 5) & 255; r2.m.memory[0xFE40] = (START - 5) >> 8
+    r2.run(); g2 = bytes(v for v, s2 in V.decode(r2.outs, bit)) == stream
+    r3 = V.Rig(img, SAVE, 0, P); setup(r3, bytes([0xFF])); r3.opc = 0x80; r3.run()
+    g3 = bytes(v for v, s2 in V.decode(r3.outs, bit)) == bytes([0xFF]) or bytes(v for v, s2 in V.decode(r3.outs, bit)) == bytes([0])
+    print('        wrong end pointer (start - 5): the whole program is sent: %s; empty program ends at once: %s' % (g2, g3))
+    ok &= g2 and g3
     # the acceptance window of an ideal receiver around the nominal bit time
     def sok(m):
         d = V.decode(r.outs, bit * m); return bytes(v for v, s in d) == stream

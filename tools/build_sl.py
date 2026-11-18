@@ -34,9 +34,12 @@ def build():
     S = SAVE_AT - LOAD_AT
     ls = lambda name: lab[name] - lab['LOAD'] + 1          # in LOAD
     sv = lambda name: S + lab[name] + 1                    # in SAVE
-    add(10, 'REM SL V3.0: LOAD &C100, SAVE &C200')
+    add(10, 'REM SL V3.1: LOAD &C100, SAVE &C200')
     add(30, 'CLEAR:WAIT 0:BEEP OFF:A=%d' % LOAD_AT)
-    add(40, 'IF PEEK(63589)+256*PEEK(63590)<A+%d THEN PRINT "NO ROOM":BEEP 3:END' % (S + (segs[1][1] - segs[1][0])))
+    # F865H/F866H = the start of the BASIC program in the notation of the PC-1500 (high byte first, bit 15 inverted). When the
+    # program is in the internal RAM (C000H or more), the machine-language area ends there: it must hold both routines
+    add(40, 'H=PEEK(63589):S=(H+128-256*INT(H/128))*256+PEEK(63590)')
+    add(42, 'IF S>49151 AND S<A+%d THEN PRINT "NO ROOM":BEEP 3:END' % (S + (segs[1][1] - segs[1][0])))
     add(50, 'D=0:INPUT "BAUD (ENTER=9600) ";D')
     add(52, 'IF D=0 THEN LET D=9600')
     add(54, 'IF D<>1200 AND D<>2400 AND D<>4800 AND D<>9600 AND D<>19200 THEN GOTO 50')
@@ -51,8 +54,7 @@ def build():
     add(117, 'POKE A+%d,V:POKE A+%d,V' % (ls('ld_bj'), ls('ld_sj')))
     add(118, 'Q=INT((T/2-105)/4+.5):GOSUB 200:POKE A+%d,U:POKE A+%d,V' % (ls('ld_hn'), ls('ld_hj')))
     add(120, 'P=PEEK(65084)+256*PEEK(65085)')
-    add(130, 'Q=PEEK(65087)+256*PEEK(65088)')
-    add(140, 'IF Q<P OR P<32768 THEN GOTO 910')
+    add(140, 'IF P<32768 THEN GOTO 910')
     add(150, 'CLS:PRINT "SL READY ";D;" BPS"')
     add(160, 'PRINT "LOAD: CALL &C100"')
     add(170, 'PRINT "SAVE: CALL &C200"')
