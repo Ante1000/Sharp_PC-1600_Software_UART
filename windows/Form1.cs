@@ -272,7 +272,7 @@ namespace UartSlTest
             tips.SetToolTip(btnView, "Show the contents of the selected file (BASIC text; program images are shown as BASIC).");
             tips.SetToolTip(chkEof, "Add the end-of-file marker. Text modes: after the file (and the dummy line) send the end-of-file character 1Ah (Ctrl-Z) so that the Sharp finishes the reception (1Ah is the end-of-file code of an ASCII file). Switch it off if the Sharp reports an error.");
             tips.SetToolTip(btnAbort, "Abort the transmission at once: stops sending the file and discards data waiting to be sent or received.");
-            tips.SetToolTip(btnConvert, "Software UART mode only. Convert the selected file: BASIC text (.bas, .txt) to a program image (.img), or a program image to BASIC text (.bas).");
+            tips.SetToolTip(btnConvert, "Software UART mode only. Convert the selected file: BASIC text (.bas, .txt) to a program image (.img), or a program image (.img, or a .bin that is a BASIC program) to BASIC text (.bas).");
             tips.SetToolTip(chkAuto, "Software UART. ON: the converter is active. A program received from the Sharp is saved as BASIC text (.bas) and BASIC files are tokenized automatically when sent (the image is not kept). OFF: only program images (.img) are used, no automatic conversion (use the Convert button).");
             tips.SetToolTip(btnLocations, "Set the default folders of the programs for PC-1500, PC-1600 and the other models.");
             tips.SetToolTip(btnDelete, "Delete the selected file from the folder (after a confirmation).");
@@ -638,8 +638,11 @@ namespace UartSlTest
                 var enc = Encoding.GetEncoding(28591);
                 string problem;
                 string outPath;
-                if (ext == ".img")
+                if (ext == ".img" || ext == ".bin")
                 {
+                    string err;
+                    // a .bin is converted only when it really is a BASIC program image (otherwise it is machine code or data)
+                    if (ext == ".bin" && !ProgImage.CheckImage(data, out err)) { Log("Not converted: " + Path.GetFileName(path) + " is not a BASIC program image (" + err + "); machine code or data?"); return; }
                     string bas = Pc1600Basic.Detokenize(data, p1500, out problem);
                     outPath = UniquePathIn(Path.GetDirectoryName(path), Path.GetFileNameWithoutExtension(path), ".bas");
                     File.WriteAllBytes(outPath, enc.GetBytes(bas));
@@ -670,7 +673,8 @@ namespace UartSlTest
                 byte[] data = File.ReadAllBytes(path);
                 string ext = Path.GetExtension(path).ToLowerInvariant();
                 string text, problem;
-                if (ext == ".img")
+                string imgErr = null;
+                if (ext == ".img" || (ext == ".bin" && ProgImage.CheckImage(data, out imgErr)))
                 {
                     text = Pc1600Basic.Detokenize(data, radio1500.Checked, out problem);
                     if (problem != null) text += "\r\n[" + problem + "]";
@@ -717,7 +721,7 @@ namespace UartSlTest
             if (btnConvert != null)
             {
                 string ext = sel ? Path.GetExtension((string)lstFiles.SelectedItem).ToLowerInvariant() : "";
-                btnConvert.Enabled = sel && !rs232 && (ext == ".bas" || ext == ".txt" || ext == ".img");   // Software UART mode only
+                btnConvert.Enabled = sel && !rs232 && (ext == ".bas" || ext == ".txt" || ext == ".img" || ext == ".bin");   // Software UART mode only
             }
         }
 
