@@ -30,7 +30,7 @@ namespace UartSlTest
         TerminalForm term;
         Button btnTerminal, btnAbort, btnConvert, btnLocations, btnDelete;
         // default folders of the target computers: PC-1500, PC-1600, other 15-pin models
-        string[] locs = LoadLocations();
+        string[] locs = LoadLocations();      // overwritten by settings.ini when it exists
         Button btnRefresh, btnOpen, btnBrowse, btnOpenDir, btnSend, btnSendOther, btnRefreshFiles;
         TextBox txtDir, txtLog;
         ListBox lstFiles;
@@ -46,9 +46,14 @@ namespace UartSlTest
             InitializeComponent();
             try { Icon = Icons.AppIcon(); } catch { }
             BuildUi();
-            FormClosing += delegate { ClosePort(); };
+            FormClosing += delegate { SaveSettings(); ClosePort(); };
             RefreshPorts();
             UpdateMode();
+            LoadSettings();
+            // restore the last port and target computer, and with it that computer's mode and transmission settings
+            if (startPort != null && comboPorts.Items.Contains(startPort)) comboPorts.SelectedItem = startPort;
+            (startModel == 0 ? radio1500 : startModel == 2 ? radioOther : radio1600).Checked = true;
+            SetTarget();
             Log("Ready. Select the port and click 'Open port'.");
         }
 
@@ -289,6 +294,9 @@ namespace UartSlTest
         {
             bool other = radioOther.Checked;
             bool p1500 = radio1500.Checked;
+            int nm = other ? 2 : p1500 ? 0 : 1;
+            if (curModel >= 0 && nm != curModel) CaptureUi(curModel);     // keep the settings of the computer we leave
+            curModel = nm;
             radioSoft.Enabled = radioRs.Enabled = !other;
             radioSio.Enabled = other;
             radioRs.Text = "RS-232 serial";
@@ -296,8 +304,8 @@ namespace UartSlTest
             else if (radioSio.Checked) radioSoft.Checked = true;
             banner.ModelName = other ? "Sharp with 15-pin connector" : p1500 ? "Sharp PC-1500" : "Sharp PC-1600";
             banner.Invalidate();
-            numDelay.Value = p1500 ? 200 : 100;   // suggested starting values, adjust by testing
-            SetDefaultDir(locs[other ? 2 : p1500 ? 0 : 1]);
+            ApplyCfg(nm);
+            SetDefaultDir(cfg[nm].Dir ?? locs[nm]);
             UpdateMode();
         }
 
@@ -317,6 +325,151 @@ namespace UartSlTest
         static string DefaultLocation(int i)
         {
             return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), i == 0 ? "PC1500" : i == 1 ? "PC1600" : "PC_15-pin");
+        }
+
+        // ------------------------------------------------------------------ settings.ini
+        // Saved when the program is closed and read at start: the port, the target computer and, for every computer,
+        // the mode and all transmission settings and the folder; also the default folders (Folders window).
+        // File: settings.ini next to the program if it is there (portable use), otherwise in %AppData%\SerComet.
+        sealed class ModelCfg
+        {
+            public int Mode;                    // 0 Software UART, 1 RS-232, 2 TTL-UART
+            public string Baud = "9600";
+            public int Delay = 100, Eol = 1, Flow = 1;
+            public bool Eof = true, Auto = true;
+            public string Dir;                  // null = the default folder
+        }
+
+        readonly ModelCfg[] cfg = { new ModelCfg { Delay = 200 }, new ModelCfg(), new ModelCfg { Mode = 2 } };
+        int curModel = -1, startModel = 1;
+        string startPort;
+        static readonly string[] ModelNames = { "PC-1500", "PC-1600", "Other 15-pin" };
+        static readonly string[] ModeNames = { "Software UART", "RS-232", "TTL-UART" };
+        static readonly string[] EolNames = { "CR", "CR+LF", "LF" };
+        static readonly string[] FlowNames = { "None", "XON/XOFF", "RTS/CTS", "DSR/DTR" };
+
+        static string SettingsFile()
+        {
+            string local = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.ini");
+            if (File.Exists(local)) return local;
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SerComet", "settings.ini");
+        }
+
+        static int IndexOf(string[] names, string v, int def)
+        {
+            for (int i = 0; i < names.Length; i++) if (string.Equals(names[i], v, StringComparison.OrdinalIgnoreCase)) return i;
+            return def;
+        }
+
+        void CaptureUi(int m)
+        {
+            if (m < 0 || m > 2) return;
+            var c = cfg[m];
+            c.Mode = radioSio.Checked ? 2 : radioRs.Checked ? 1 : 0;
+            c.Baud = savedBaud;
+            c.Delay = (int)numDelay.Value;
+            c.Eol = comboEol.SelectedIndex;
+            c.Flow = comboFlow.SelectedIndex;
+            c.Eof = chkEof.Checked;
+            c.Auto = chkAuto.Checked;
+            c.Dir = txtDir.Text;
+        }
+
+        void ApplyCfg(int m)
+        {
+            var c = cfg[m];
+            if (m == 2) radioSio.Checked = true;
+            else if (c.Mode == 1) radioRs.Checked = true;
+            else radioSoft.Checked = true;
+            savedBaud = comboBaud.Items.Contains(c.Baud) ? c.Baud : "9600";
+            numDelay.Value = Math.Max(numDelay.Minimum, Math.Min(numDelay.Maximum, c.Delay));
+            comboEol.SelectedIndex = c.Eol >= 0 && c.Eol < 3 ? c.Eol : 1;
+            comboFlow.SelectedIndex = c.Flow >= 0 && c.Flow < 4 ? c.Flow : 1;
+            chkEof.Checked = c.Eof;
+            chkAuto.Checked = c.Auto;
+        }
+
+        void LoadSettings()
+        {
+            try
+            {
+                string f = SettingsFile();
+                if (!File.Exists(f)) return;                       // first start (or only the old locations.txt)
+                var sec = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+                Dictionary<string, string> cur = null;
+                foreach (string raw in File.ReadAllLines(f))
+                {
+                    string l = raw.Trim();
+                    if (l.Length == 0 || l[0] == ';' || l[0] == '#') continue;
+                    if (l[0] == '[' && l[l.Length - 1] == ']')
+                    {
+                        string n = l.Substring(1, l.Length - 2).Trim();
+                        if (!sec.TryGetValue(n, out cur)) { cur = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); sec[n] = cur; }
+                        continue;
+                    }
+                    int eq = l.IndexOf('=');
+                    if (cur != null && eq > 0) cur[l.Substring(0, eq).Trim()] = l.Substring(eq + 1).Trim();
+                }
+                Func<string, string, string> get = (s1, k) =>
+                {
+                    Dictionary<string, string> d; string v;
+                    return sec.TryGetValue(s1, out d) && d.TryGetValue(k, out v) && v.Length > 0 ? v : null;
+                };
+                startPort = get("General", "Port");
+                startModel = IndexOf(ModelNames, get("General", "Target"), 1);
+                for (int m = 0; m < 3; m++)
+                {
+                    string d = get("Folders", ModelNames[m]);
+                    if (d != null) locs[m] = d;
+                    string n = ModelNames[m];
+                    var c = cfg[m];
+                    c.Mode = IndexOf(ModeNames, get(n, "Mode"), c.Mode);
+                    c.Baud = get(n, "Baud") ?? c.Baud;
+                    int v;
+                    if (int.TryParse(get(n, "Delay"), out v)) c.Delay = v;
+                    c.Eol = IndexOf(EolNames, get(n, "LineEnd"), c.Eol);
+                    c.Flow = IndexOf(FlowNames, get(n, "Flow"), c.Flow);
+                    if (get(n, "EofMarker") != null) c.Eof = get(n, "EofMarker") == "1";
+                    if (get(n, "AutoTokenize") != null) c.Auto = get(n, "AutoTokenize") == "1";
+                    c.Dir = get(n, "Folder");
+                }
+            }
+            catch { }
+        }
+
+        void SaveSettings()
+        {
+            try
+            {
+                CaptureUi(curModel);
+                var sb = new StringBuilder();
+                sb.AppendLine("; SerComet settings (written when the program is closed)");
+                sb.AppendLine("[General]");
+                sb.AppendLine("Port=" + (comboPorts.SelectedItem as string ?? ""));
+                sb.AppendLine("Target=" + ModelNames[curModel < 0 ? 1 : curModel]);
+                sb.AppendLine();
+                sb.AppendLine("; default folders of the programs (Folders window)");
+                sb.AppendLine("[Folders]");
+                for (int m = 0; m < 3; m++) sb.AppendLine(ModelNames[m] + "=" + locs[m]);
+                for (int m = 0; m < 3; m++)
+                {
+                    var c = cfg[m];
+                    sb.AppendLine();
+                    sb.AppendLine("[" + ModelNames[m] + "]");
+                    sb.AppendLine("Mode=" + ModeNames[c.Mode]);
+                    sb.AppendLine("Baud=" + c.Baud);
+                    sb.AppendLine("Delay=" + c.Delay);
+                    sb.AppendLine("LineEnd=" + EolNames[c.Eol]);
+                    sb.AppendLine("Flow=" + FlowNames[c.Flow]);
+                    sb.AppendLine("EofMarker=" + (c.Eof ? "1" : "0"));
+                    sb.AppendLine("AutoTokenize=" + (c.Auto ? "1" : "0"));
+                    sb.AppendLine("Folder=" + (c.Dir ?? locs[m]));
+                }
+                string f = SettingsFile();
+                Directory.CreateDirectory(Path.GetDirectoryName(f));
+                File.WriteAllText(f, sb.ToString());
+            }
+            catch (Exception ex) { Log("Cannot save the settings: " + ex.Message); }
         }
 
         static string LocationsFile()
@@ -339,16 +492,6 @@ namespace UartSlTest
             return l;
         }
 
-        void SaveLocations()
-        {
-            try
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(LocationsFile()));
-                File.WriteAllLines(LocationsFile(), locs);
-            }
-            catch (Exception ex) { Log("Cannot save the locations: " + ex.Message); }
-        }
-
         // second window: the folders of the programs for each target computer
         void EditLocations()
         {
@@ -356,8 +499,9 @@ namespace UartSlTest
             {
                 if (d.ShowDialog(this) != DialogResult.OK) return;
                 locs = d.Result;
-                SaveLocations();
-                SetDefaultDir(locs[radioOther.Checked ? 2 : radio1500.Checked ? 0 : 1]);
+                for (int m = 0; m < 3; m++) cfg[m].Dir = locs[m];      // the new default folders are used from now on
+                SaveSettings();
+                SetDefaultDir(locs[curModel < 0 ? 1 : curModel]);
             }
         }
 
