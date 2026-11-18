@@ -321,12 +321,13 @@ namespace UartSlTest
         {
             if (radioSio.Checked)
                 return "Compatible: PC-1350, PC-1360, PC-1450..90, PC-E500..650, PC-U6000, PC-2500 (15-pin, TTL-UART SIO via a USB/COM adapter).\r\n" +
-                       "PC-E500(S): OPEN\"9600,N,8,1,A,L,&H1A,N,N\" : CLOSE, then LOAD\"COM:\" (Send) or SAVE\"COM:\" (Receive) (to verify).\r\n" +
-                       "PC-1360: OPEN\"1200,N,8,1,A,C,&40\" (or &1A, &26: to verify), then LOAD / SAVE (to verify).\r\n" +
+                       "PC-1350 / PC-1360: OPEN \"1200,N,8,1,A,C,&1A\", then LOAD (SerComet: Send) or SAVE (SerComet: Receive).\r\n" +
+                       "PC-E500(S): OPEN \"9600,N,8,1,A,L,&H1A,N,N\" : CLOSE, then LOAD / SAVE (COM is the default device).\r\n" +
+                       "SAVE [\"name\"[,A]]: the name (up to 8 characters) is optional; on COM the program is always sent as ASCII text.\r\n" +
                        "Text transfer (.bas); the file is saved after EOF (1Ah) or 3 s of silence.";
             if (radio1500.Checked && radioRs.Checked)
-                return "Into the PC-1500 with CE-158(X) (Send): SETDEV U1,CO,CI then CLOAD a (to verify). Same baud rate (SETCOM) as in SerComet.\r\n" +
-                       "From the PC-1500 (Receive): SETDEV U1,CO,CI then CSAVE a (to verify; CSAVE needs CO set by SETDEV, one more CR follows).\r\n" +
+                return "PC-1500 with CE-158(X): SETCOM 2400,8,N,1 (the same baud rate as in SerComet).\r\n" +
+                       "Into the PC-1500 (SerComet: Send): SETDEV CI, then CLOADa.   From the PC-1500 (SerComet: Receive): SETDEV CO, then CSAVEa.\r\n" +
                        "Text transfer (.bas); the file is saved after EOF (1Ah) or 3 s of silence.";
             if (radio1500.Checked)
                 return "PC-1500 software serial (Saver/Loader for the PC-1500) is not implemented yet. Use RS-232 - CE-158(X).";
