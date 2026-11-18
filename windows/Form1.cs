@@ -200,7 +200,7 @@ namespace UartSlTest
                 // "by Alex F4VTS" to the right of the title, a round "?" button (About) on the left
                 var by = new Label { Text = "by Alex F4VTS", AutoSize = true, Font = new Font("Segoe UI", 9F, FontStyle.Bold | FontStyle.Italic), ForeColor = Color.FromArgb(90, 110, 140), Left = x0 + 40 + ts.Width + 10, Top = 4 + (32 - ts.Height) / 2 + 3, Anchor = AnchorStyles.Top };
                 Controls.Add(by);
-                var about = new RoundHelpButton { Left = 12, Top = 11, Width = 18, Height = 18, Anchor = AnchorStyles.Top | AnchorStyles.Left };
+                var about = new RoundHelpButton { Left = 11, Top = 15, Width = 21, Height = 21, Anchor = AnchorStyles.Top | AnchorStyles.Left };
                 about.Click += delegate { using (var d = new AboutForm()) d.ShowDialog(this); };
                 tips.SetToolTip(about, "About SerComet: author, license and project page.");
                 Controls.Add(about);
@@ -2034,7 +2034,7 @@ namespace UartSlTest
             // system colours: the same as the window background, so the button is discreet
             using (var b = new SolidBrush(hover ? SystemColors.ControlLightLight : SystemColors.Control)) g.FillEllipse(b, r);
             using (var p = new Pen(hover ? SystemColors.ControlDarkDark : SystemColors.ControlDark, 1.5f)) g.DrawEllipse(p, r);
-            using (var f = new Font("Segoe UI", 8F, FontStyle.Bold))
+            using (var f = new Font("Segoe UI", 9.2F, FontStyle.Bold))
             {
                 SizeF sz = g.MeasureString("?", f);
                 g.DrawString("?", f, SystemBrushes.ControlText, (Width - sz.Width) / 2 + 0.5f, (Height - sz.Height) / 2);
