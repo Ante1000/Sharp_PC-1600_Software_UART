@@ -198,9 +198,9 @@ namespace UartSlTest
                     Left = x0 + 40, Top = 4 + (32 - ts.Height) / 2, Anchor = AnchorStyles.Top
                 });
                 // "by Alex F4VTS" to the right of the title, a round "?" button (About) on the left
-                var by = new Label { Text = "by Alex F4VTS", AutoSize = true, Font = new Font("Segoe UI", 9F, FontStyle.Bold | FontStyle.Italic), ForeColor = Color.FromArgb(90, 110, 140), Left = x0 + 40 + ts.Width + 10, Top = 4 + (32 - ts.Height) / 2 + 3, Anchor = AnchorStyles.Top };
+                var by = new Label { Text = "by Alex Matczewski F4VTS", AutoSize = true, Font = new Font("Segoe UI", 9F, FontStyle.Bold | FontStyle.Italic), ForeColor = Color.FromArgb(90, 110, 140), Left = x0 + 40 + ts.Width + 10, Top = 4 + (32 - ts.Height) / 2 + 3, Anchor = AnchorStyles.Top };
                 Controls.Add(by);
-                var about = new RoundHelpButton { Left = 11, Top = 15, Width = 21, Height = 21, Anchor = AnchorStyles.Top | AnchorStyles.Left };
+                var about = new RoundHelpButton { Left = 10, Top = 9, Width = 21, Height = 21, Anchor = AnchorStyles.Top | AnchorStyles.Left };
                 about.Click += delegate { using (var d = new AboutForm()) d.ShowDialog(this); };
                 tips.SetToolTip(about, "About SerComet: author, license and project page.");
                 Controls.Add(about);
