@@ -306,6 +306,7 @@ namespace UartSlTest
             if (other) radioSio.Checked = true;
             else if (radioSio.Checked) radioSoft.Checked = true;
             banner.ModelName = other ? "Sharp with 15-pin connector" : p1500 ? "Sharp PC-1500" : "Sharp PC-1600";
+            banner.Model = nm;
             banner.Invalidate();
             ApplyCfg(nm);
             SetDefaultDir(cfg[nm].Dir ?? locs[nm]);
@@ -1230,6 +1231,7 @@ namespace UartSlTest
         public bool PortOpen, Sending, Receiving, Blink;   // Blink toggles ~5x per second while data flows
         Bitmap cometImg;
         public string ModelName = "Sharp PC-1600";
+        public int Model = 1;                 // 0 PC-1500, 1 PC-1600, 2 other models with the 15-pin connector (drawing of a PC-E500)
 
         public BannerPanel() { DoubleBuffered = true; ResizeRedraw = true; }
 
@@ -1270,6 +1272,77 @@ namespace UartSlTest
         static void Led(Graphics g, Color c, int cx, int y)
         {
             using (var b = new SolidBrush(c)) g.FillEllipse(b, cx - 5, y, 10, 10);
+        }
+
+        // Sharp PC-1500: light body, a brown band over the whole width with a narrow one-line display and the logo,
+        // a row of small keys, the QWERTY keys and a numeric pad with a red CL key
+        static void DrawPc1500(Graphics g, int kx, int top)
+        {
+            var state = g.Save();
+            g.TranslateTransform(kx, top + 60);
+            g.ScaleTransform(0.7F, 0.7F);
+            g.TranslateTransform(-kx, -(top + 60));
+            FillRound(g, Color.FromArgb(150, 150, 146), kx - 86, top + 10, 172, 82, 6);
+            FillRound(g, Color.FromArgb(226, 226, 220), kx - 85, top + 8, 170, 82, 6);
+            using (var b = new SolidBrush(Color.FromArgb(92, 66, 52))) g.FillRectangle(b, kx - 85, top + 12, 170, 24);        // brown band
+            using (var b = new SolidBrush(Color.FromArgb(176, 194, 164))) g.FillRectangle(b, kx - 66, top + 19, 116, 10);   // one-line display
+            using (var f = new Font("Arial", 5.5F, FontStyle.Bold)) Text(g, "SHARP", f, Color.FromArgb(235, 230, 220), kx + 68, top + 18);
+            using (var bg = new SolidBrush(Color.FromArgb(190, 190, 184)))
+            using (var bl = new SolidBrush(Color.FromArgb(246, 246, 240)))
+            using (var bd = new SolidBrush(Color.FromArgb(80, 80, 84)))
+            using (var br = new SolidBrush(Color.FromArgb(200, 50, 45)))
+            using (var bo = new SolidBrush(Color.FromArgb(225, 130, 40)))
+            {
+                for (int i = 0; i < 6; i++) g.FillRectangle(bg, kx - 76 + i * 13, top + 41, 10, 4);                // row of small keys
+                g.FillRectangle(bd, kx + 34, top + 41, 12, 4);
+                g.FillRectangle(br, kx + 66, top + 41, 12, 4);
+                int[] cnt = { 10, 10, 9 };
+                for (int row = 0; row < 3; row++)
+                    for (int col = 0; col < cnt[row]; col++)
+                        g.FillRectangle(bl, kx - 78 + col * 10 + row * 3, top + 50 + row * 9, 8, 6);               // QWERTY keys
+                g.FillRectangle(bd, kx - 52, top + 77, 44, 5);                                                      // space bar
+                for (int row = 0; row < 4; row++)
+                    for (int col = 0; col < 4; col++)
+                        g.FillRectangle(col == 3 && row == 0 ? bo : bl, kx + 28 + col * 12, top + 50 + row * 8, 9, 6);   // numeric pad
+            }
+            g.Restore(state);
+        }
+
+        // Sharp pocket computers with the 15-pin connector (drawing of a PC-E500): dark grey body, a large display,
+        // function keys under it, the QWERTY keys and a numeric pad with light keys
+        static void DrawPc15pin(Graphics g, int kx, int top)
+        {
+            var state = g.Save();
+            g.TranslateTransform(kx, top + 60);
+            g.ScaleTransform(0.7F, 0.7F);
+            g.TranslateTransform(-kx, -(top + 60));
+            FillRound(g, Color.FromArgb(25, 25, 28), kx - 86, top + 10, 172, 82, 6);
+            FillRound(g, Color.FromArgb(70, 70, 74), kx - 85, top + 8, 170, 82, 6);
+            FillRound(g, Color.FromArgb(40, 40, 44), kx - 82, top + 11, 118, 36, 3);                                  // display frame
+            using (var b = new SolidBrush(Color.FromArgb(172, 188, 150))) g.FillRectangle(b, kx - 78, top + 15, 110, 28);   // large display
+            using (var b = new SolidBrush(Color.FromArgb(60, 78, 56)))
+                for (int c = 0; c < 80; c += 3) g.FillRectangle(b, kx - 60 + c, top + 26, 2, 4);                       // a line of text
+            using (var f = new Font("Arial", 5.5F, FontStyle.Bold)) Text(g, "SHARP", f, Color.FromArgb(220, 220, 220), kx + 62, top + 12);
+            using (var bk = new SolidBrush(Color.FromArgb(34, 34, 38)))
+            using (var bg = new SolidBrush(Color.FromArgb(210, 210, 206)))
+            using (var bs = new SolidBrush(Color.FromArgb(165, 170, 175)))
+            using (var br = new SolidBrush(Color.FromArgb(200, 50, 45)))
+            using (var bo = new SolidBrush(Color.FromArgb(225, 130, 40)))
+            {
+                for (int i = 0; i < 5; i++) g.FillRectangle(bk, kx - 78 + i * 23, top + 51, 19, 5);                       // PF1..PF5
+                for (int row = 0; row < 3; row++)                                                                           // scientific keys, top right
+                    for (int col = 0; col < 5; col++)
+                        g.FillRectangle(row == 0 && col == 4 ? br : bs, kx + 40 + col * 8, top + 13 + row * 8, 6, 5);
+                int[] cnt = { 10, 9, 9 };
+                for (int row = 0; row < 3; row++)
+                    for (int col = 0; col < cnt[row]; col++)
+                        g.FillRectangle(bk, kx - 80 + col * 10 + row * 4, top + 59 + row * 8, 8, 5);                    // QWERTY keys
+                g.FillRectangle(bk, kx - 50, top + 83, 40, 4);
+                for (int row = 0; row < 4; row++)
+                    for (int col = 0; col < 4; col++)
+                        g.FillRectangle(col == 3 && row == 2 ? bo : bg, kx + 40 + col * 11, top + 51 + row * 9, 9, 7);   // numeric pad
+            }
+            g.Restore(state);
         }
 
         // Sharp PC-1600 (as on the photo): light body, LCD on the left (2/3), dark brown panel with the logo on the right (1/3),
@@ -1344,7 +1417,9 @@ namespace UartSlTest
             using (var b = new SolidBrush(Color.FromArgb(120, 115, 105)))
                 for (int i = 0; i < 10; i++) { g.FillRectangle(b, pcx - 50 + i * 10, top + 84, 7, 3); g.FillRectangle(b, pcx - 48 + i * 10, top + 89, 7, 3); }
 
-            DrawPc1600(g, kx, top);
+            if (Model == 0) DrawPc1500(g, kx, top);
+            else if (Model == 2) DrawPc15pin(g, kx, top);
+            else DrawPc1600(g, kx, top);
 
             // captions
             using (var f = new Font("Segoe UI", 9F)) { Text(g, "Windows PC", f, Color.White, pcx, top + 100); Text(g, ModelName, f, Color.White, kx, top + 100); }
