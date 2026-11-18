@@ -1143,6 +1143,8 @@ namespace UartSlTest
                 var p = port;
                 await Task.Run(() =>
                 {
+                  try
+                  {
                     p.DiscardInBuffer();
                     if (!text)
                     {
@@ -1183,6 +1185,13 @@ namespace UartSlTest
                     if (text && eof) p.Write(new byte[] { 0x1A }, 0, 1);
                     while (p.BytesToWrite > 0) System.Threading.Thread.Sleep(10);
                     report(100);
+                  }
+                  catch (Exception)
+                  {
+                    // Abort discards the buffers while Write waits: the port then throws an IOException ("the I/O operation has been
+                    // aborted ..."). That is expected after Abort and must not stop the program; any other error is reported
+                    if (!abortRequested) throw;
+                  }
                 });
                 if (abortRequested) Log("Transmission aborted."); else Log(text ? "Sent." : "Sent. The PC-1600 finishes after 0.5 s of silence; check the program with LIST.");
             }
