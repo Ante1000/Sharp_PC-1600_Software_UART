@@ -795,8 +795,8 @@ namespace UartSlTest
                 Directory.CreateDirectory(txtDir.Text);
                 if (rs232)
                 {
-                    string name = ProgImage.NameFromText(data) ?? "PROGRAM_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
-                    string path = UniquePath(name, ".bas");
+                    string name = SharpBase(ProgImage.NameFromText(data));
+                    string path = UniqueSharp(name, ".bas");
                     File.WriteAllBytes(path, data);
                     Log("RECEIVED " + data.Length + " B (text) -> " + Path.GetFileName(path));
                     RefreshFiles();
@@ -806,7 +806,7 @@ namespace UartSlTest
                 if (ProgImage.CheckStream(data, out err))
                 {
                     byte[] img = ProgImage.ImageFromStream(data);
-                    string name = ProgImage.NameFromRem(img) ?? "PROGRAM_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                    string name = SharpBase(ProgImage.NameFromRem(img));
                     string path = null;
                     string note = "";
                     if (chkAuto.Checked && !radio1500.Checked)
@@ -816,7 +816,7 @@ namespace UartSlTest
                         string bas = Pc1600Basic.Detokenize(img, out problem);
                         if (problem == null)
                         {
-                            path = UniquePath(name, ".bas");
+                            path = UniqueSharp(name, ".bas");
                             File.WriteAllBytes(path, Encoding.GetEncoding(28591).GetBytes(bas));
                             note = " (converted from the PC-1600 intermediate code)";
                         }
@@ -824,7 +824,7 @@ namespace UartSlTest
                     }
                     if (path == null)
                     {
-                        path = UniquePath(name, ".img");
+                        path = UniqueSharp(name, ".img");
                         File.WriteAllBytes(path, img);
                     }
                     Log("RECEIVED " + data.Length + " B, " + ProgImage.CountLines(img) + " lines, checksum OK -> " + Path.GetFileName(path) + note);
@@ -862,6 +862,40 @@ namespace UartSlTest
                 if (i > 0 && i < t.Length) return true;          // "10 PRINT ..."
             }
             return d.Length >= 64;
+        }
+
+        // ------------------------------------------------------------------ names for the Sharp
+        int NameModel { get { return curModel < 0 ? 1 : curModel; } }
+
+        // the name of a program for the selected computer (length and characters); no name: PRG + time
+        string SharpBase(string raw)
+        {
+            bool changed;
+            string n = SharpName.Fix(string.IsNullOrEmpty(raw) ? "PRG" + DateTime.Now.ToString("HHmmss") : raw, NameModel, out changed);
+            return n;
+        }
+
+        // a free file name with a number at the end that keeps the length limit of the Sharp name
+        string UniqueSharp(string name, string ext)
+        {
+            string path = Path.Combine(txtDir.Text, name + ext);
+            int max = SharpName.MaxBase(NameModel);
+            for (int i = 2; File.Exists(path); i++)
+            {
+                string suffix = i.ToString();
+                string b = name.Substring(0, Math.Min(name.Length, max - suffix.Length)) + suffix;
+                path = Path.Combine(txtDir.Text, b + ext);
+            }
+            return path;
+        }
+
+        // before a file is sent: the name the pocket computer can use (the stream itself carries no name)
+        void CheckSharpName(string path)
+        {
+            string raw = Path.GetFileNameWithoutExtension(path);
+            bool changed;
+            string n = SharpName.Fix(raw, NameModel, out changed);
+            if (changed) Log("Name for the " + ModelNames[NameModel] + ": \"" + n + "\" (shortened or changed from \"" + raw + "\": " + SharpName.Rules(NameModel) + ").");
         }
 
         string UniquePath(string name, string ext)
@@ -1053,6 +1087,7 @@ namespace UartSlTest
             abortRequested = false;
             sending = true;
             btnSend.Enabled = btnSendOther.Enabled = false;
+            CheckSharpName(path);
             progText = "SENDING " + Path.GetFileName(path) + " (" + data.Length + " B)";
             progStart = txtLog.TextLength;
             Log(progText + " (0%)");
@@ -2112,6 +2147,57 @@ namespace UartSlTest
 
     public static class AppInfo
     {
-        public const string Version = "1.1";      // SerComet 1.1: Software UART speeds 1200 to 19200 (SL V3.0), settings.ini, .img files
+        public const string Version = "1.2";      // 1.1: Software UART speeds 1200 to 19200 (SL V3.0), settings.ini, .img files; 1.2: names of the programs checked for the Sharp
+    }
+
+    // Names of programs for the pocket computers: the length and the characters that the Sharp accepts
+    //   PC-1500: up to 16 characters, any ASCII (no quotation mark, no control characters)
+    //   PC-1600: 8 + 3 (8.3), capital letters A-Z, digits and # $ % & ' ( ) - @ ^ _ { } ~
+    //   other models with the 15-pin connector (PC-1350/1360: 7 characters, PC-E500: 8 + 3): the common rules of 7 + 3 as for the PC-1600
+    public static class SharpName
+    {
+        const string Symbols = "#$%&'()-@^_{}~";
+
+        public static int MaxBase(int model) { return model == 0 ? 16 : model == 2 ? 7 : 8; }
+
+        public static string Rules(int model)
+        {
+            return model == 0 ? "up to 16 characters, no quotation mark"
+                 : model == 2 ? "up to 7 characters, capital letters, digits and " + Symbols
+                 : "up to 8 characters, capital letters, digits and " + Symbols;
+        }
+
+        // letters with accents -> plain letters (a with ogonek -> a, l with stroke -> l ...)
+        static string Plain(string s)
+        {
+            var sb = new StringBuilder();
+            foreach (char c in s.Normalize(NormalizationForm.FormD))
+            {
+                if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) == System.Globalization.UnicodeCategory.NonSpacingMark) continue;
+                sb.Append(c == '\u0142' ? 'l' : c == '\u0141' ? 'L' : c);
+            }
+            return sb.ToString();
+        }
+
+        public static string Fix(string name, int model, out bool changed)
+        {
+            string src = name ?? "";
+            var sb = new StringBuilder();
+            foreach (char c in Plain(src))
+            {
+                if (model == 0) sb.Append(c < 32 || c > 126 || c == '"' ? '_' : c);
+                else
+                {
+                    char u = char.ToUpperInvariant(c);
+                    sb.Append((u >= 'A' && u <= 'Z') || (u >= '0' && u <= '9') || Symbols.IndexOf(u) >= 0 ? u : '_');
+                }
+            }
+            string r = sb.ToString().Trim();
+            int max = MaxBase(model);
+            if (r.Length > max) r = r.Substring(0, max).TrimEnd();
+            if (r.Length == 0) r = "PRG";
+            changed = r != src;
+            return r;
+        }
     }
 }
