@@ -64,6 +64,8 @@ used. According to the PC-1600 schematic and the Technical Reference the levels 
 | `Basic/sl_v2.1.txt`, `asm/uart1600_sl_v2.1.asm` | the previous version V2.1 (fixed 19200 bps): kept as a working fallback |
 | `asm/uart1600_sl.asm` | source of SAVE and LOAD (position independent, no buffer) |
 | `tools/build_sl.py`, `tools/verify_sl.py` | makes `Basic/sl.txt`; emulator test of SAVE and LOAD |
+| `Basic/sl1500.txt` | **Saver/Loader for the PC-1500(A)** (4800 bps, see [below](#saver-loader-for-the-pc-1500a-4800-bps)): BASIC installer (34 lines, 1.8 KB) of the machine-language LOAD and SAVE |
+| `asm/uart1500_sl.asm`, `tools/lh5801asm.py`, `tools/build_sl1500.py`, `tools/verify_sl1500.py` | source of the PC-1500 SL, a small LH5801 assembler, the installer builder and the simulator test |
 | `asm/uart1600.asm` | source of SEROUT, SERIN and PROBE (assembler: `z80asm`) with all comments |
 | `tools/build_loader.py` | makes `Basic/uart1600.txt` from `asm/uart1600.asm` (needs `z80asm`) |
 | `tools/verify_listing.py` | emulator test of the loader listing (needs `pip install z80` and `z80asm`) |
@@ -272,11 +274,42 @@ A separate, small program (like the SAVER/LOADER of the PC-1500): it puts two ma
   of UART1600 (`BIT = base + 16*N - 4*K`, bases 100 for SAVE and 99 for LOAD), whose timings were tried on a real PC-1600 at the speeds 300 to 38400 bps.
   V3.2 fixes the end pointer after LOAD: the versions up to V3.1 wrote only `F868H` (the low byte) and the high byte of the old end stayed in `F867H`, so a program that ended on another 256-byte page than the previous one had a wrong end (`STATUS 1` negative, error 13 when a line was added; seen with a 6 KB test program: -11). The SL V3.2 itself has been tested only in the emulator so far (also with a wrong `FE3FH` and a stale `F867H`); V2.1 (19200 bps) has been used on the real machine.
 
+## Saver/Loader for the PC-1500(A) (4800 bps)
+
+The same idea for the Sharp PC-1500(A) (the software UART of [UART7.3](https://github.com/Ante1000/Sharp_PC-1500_Software_UART): **TX = PC7**
+(60-pin connector pin 10), **RX = PB2** (CMT IN, pin 27; or PB0, pin 9, with the CE-150 modification), 8N1, TTL levels, **fixed 4800 bps**). Two
+machine-language routines put in the RAM **send a BASIC program to SerComet / a terminal and load it back**, as a binary file: the bytes of the
+program as they lie in the memory (tokens) followed by one checksum byte (the same file as for the PC-1600; SerComet saves it as `.img` or, with Auto
+tokenize, as BASIC text). The bit routines are those of UART7.3 v6.2 (tested on a real PC-1500A) with the constants of 4800 bps; only the buffer
+handling is new: the program is sent / received directly from / into the program memory.
+
+1. Install it: switch to PRO mode, type `NEW0` and `NEW &4200` (RAM start + `&200`; on a PC-1500A with the RAM from `&4000`; other RAM: `PEEK &7863` = high byte of the RAM start,
+   see [HELP_NEW_memory.md](https://github.com/Ante1000/Sharp_PC-1500_Software_UART/blob/main/HELP_NEW_memory.md)), then type in or `CLOAD` `Basic/sl1500.txt` (34 lines, 1.8 KB as text, 1.6 KB in the memory, `DATA` with a checksum; so a PC-1500A or a RAM module: a bare 2 KB PC-1500 has only 1.5 KB from `&4200`) and `RUN`.
+   It asks for the RX port (ENTER = PB2, `0` = PB0), POKEs the 312 bytes, checks them and prints the two calls. The code lies from RAM start + `&C5`:
+   **LOAD at `&40C5` (16581) and SAVE at `&4184` (16772)**, ending at `&41FC`. Then `NEW` (in PRO mode) deletes the installer; the routines stay.
+2. **Save** (PC-1500 to SerComet, Software UART, target PC-1500, 4800): RUN mode, `CALL &4184` [ENTER] (or `X=0 : CALL &4184,X`: `X` = 1 when done).
+   The program is sent from the start (`&7865`/`&7866`) up to the end marker FFH (address in `&7867`/`&7868`), followed by the checksum byte.
+3. **Load** (SerComet to the PC-1500): type `NEW`, then `CALL &40C5` [ENTER] and within 30 s press Send. The end of the file is 0.5 s without a byte.
+   With a variable (`X=0 : CALL &40C5,X`): 1 = loaded, 2 = checksum error, 3 = nothing received, 4 = does not fit into the RAM
+   (`&7864` = high byte of the end of the RAM + 1). After an error (2 or 4) the memory is left empty (FFH at the start, as after `NEW`).
+   LOAD puts the end marker FFH over the checksum byte and sets the end pointer `&7867`/`&7868` to its address (what the ROM does after `NEW` and `CLOAD`).
+- **Type `NEW` before LOAD** (it also clears the variables); a program in memory is replaced, not merged. Use LOAD / SAVE as direct commands.
+- Both routines switch the interrupts off for the timing (`RIE`) and on again at the end (`SIE`), keep PC7 high (idle), and need no buffer.
+- **Tested only in a simulator so far, not on a real PC-1500** (`python3 tools/verify_sl1500.py`, about 90 s): a small LH5801 simulator with the
+  cycle counts of the [pc1500emu](https://github.com/pchambre/pc1500emu) opcode table runs the code in a memory laid out like the BASIC of the PC-1500
+  (pointers read from the ROM listings of the PC-1500 and the CE-150). SAVE gives exactly the program plus the checksum (8N1 read at 4800 bps,
+  frames of about 10.5 bit times); LOAD takes the stream with gaps, at all phases, with a baud error of -4.5 % to +6 %, with a glitch before the start bit, with PB0,
+  reports the errors above, and a file that fills the RAM exactly (to `&47FF`) is accepted. The routines are checked against the ROM:
+  the pointer convention (`&7865` start, `&7867` = address of the end marker FFH, high byte first, no inversion) is that of `NEW` and `MERGE` in the PC-1500 ROM. If a program loaded
+  with LOAD behaves strangely (`LIST` shows garbage, `RUN` fails), please report the first and last lines and `PEEK &7865..&7868`.
+
 ## Rebuilding
 
 ```
 python3 tools/build_loader.py        # asm/uart1600.asm -> Basic/uart1600.txt (needs z80asm)
 python3 tools/verify_listing.py      # emulator test of the listing (pip install z80)
+python3 tools/build_sl1500.py        # asm/uart1500_sl.asm -> Basic/sl1500.txt (own assembler, no extra tools)
+python3 tools/verify_sl1500.py       # simulator test of the PC-1500 SAVE / LOAD and of the installer
 ```
 
 ## Author

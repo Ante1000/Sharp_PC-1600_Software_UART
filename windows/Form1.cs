@@ -270,10 +270,10 @@ namespace UartSlTest
             tips.SetToolTip(btnRefresh, "Re-scan the list of available COM ports.");
             tips.SetToolTip(btnOpen, "Open or close the selected COM port.");
             tips.SetToolTip(led, "Port status: green = open, dark = closed.");
-            tips.SetToolTip(radio1500, "Target: Sharp PC-1500 (RS-232 through the CE-158(X) interface).");
+            tips.SetToolTip(radio1500, "Target: Sharp PC-1500 (software serial Saver/Loader at 4800 baud, or RS-232 through the CE-158(X) interface).");
             tips.SetToolTip(radio1600, "Target: Sharp PC-1600 (software serial Saver/Loader or its RS-232 port).");
             tips.SetToolTip(radioOther, "Target: other Sharp pocket computers with the 15-pin connector (TTL-UART SIO).");
-            tips.SetToolTip(radioSoft, "Software UART in the Sharp (machine-language Saver/Loader), binary .img files, speed 1200 to 19200 (as chosen in the SL installer).");
+            tips.SetToolTip(radioSoft, "Software UART in the Sharp (machine-language Saver/Loader), binary .img files. PC-1600: speed 1200 to 19200 (as chosen in the SL installer); PC-1500: 4800 baud.");
             tips.SetToolTip(radioRs, "Classic RS-232 text transfer, like a terminal program. The baud rate is selectable.");
             tips.SetToolTip(radioSio, "TTL-UART SIO text transfer through the 15-pin connector. The baud rate is selectable.");
             tips.SetToolTip(comboBaud, "Baud rate (8N1). Fixed and greyed out for Software Serial, selectable for the text modes.");
@@ -344,7 +344,7 @@ namespace UartSlTest
                        "Into the PC-1500 (SerComet: Send): SETDEV CI, then CLOADa.   From the PC-1500 (SerComet: Receive): SETDEV CO, then CSAVEa.\r\n" +
                        "Text transfer (.bas); the file is saved after EOF (1Ah) or 3 s of silence.";
             if (radio1500.Checked)
-                return "PC-1500 software serial (Saver/Loader for the PC-1500) is not implemented yet. Use RS-232 - CE-158(X).";
+                return "Software UART: 8N1 at 4800 baud (fixed), binary transfer (.img files). TX = PC7 (pin 10), RX = PB2 (pin 27) of the PC-1500. RECEIVE: on the PC-1500 type CALL &4184 (SAVE). The file is saved automatically, named after the first REM.\r\nSEND: type NEW, then CALL &40C5 (LOAD) on the PC-1500 first, then press Send (30 s to start). Addresses for a RAM starting at &4000 (the SL installer shows the others).";
             if (radioRs.Checked)
                 return "Into the PC-1600 (Send): INIT\"COM1:\",512 / SETCOM\"COM1:\",2400 / LOAD\"COM1:\" (same baud rate as in SerComet).\r\n" +
                        "From the PC-1600 (Receive): SAVE\"COM1:\",A. Text transfer (.bas); the file is saved after EOF (1Ah) or 3 s of silence.\r\n" +
@@ -602,7 +602,7 @@ namespace UartSlTest
             get
             {
                 if (rs232) return int.Parse((string)comboBaud.SelectedItem);
-                return radio1500.Checked ? 9600 : int.Parse((string)comboBaud.SelectedItem);
+                return radio1500.Checked ? 4800 : int.Parse((string)comboBaud.SelectedItem);
             }
         }
 
@@ -614,11 +614,11 @@ namespace UartSlTest
             chkAuto.Enabled = !rs232;
             comboBaud.Enabled = false;                                      // (so that filling the list does not change the saved values)
             FillBaud(rs232 ? TextBauds : SoftBauds);
-            comboBaud.SelectedItem = rs232 ? savedBaud : softEdit ? savedSoftBaud : "9600";
+            comboBaud.SelectedItem = rs232 ? savedBaud : softEdit ? savedSoftBaud : "4800";
             comboBaud.Enabled = rs232 || softEdit;
             tips.SetToolTip(comboBaud, softEdit
                 ? "Baud rate of the Software UART (8N1), the same as chosen in the SL installer. 9600 is the default and recommended, 19200 is fast, the lower speeds 4800 and 2400 (and 1200) are more reliable."
-                : rs232 ? "Baud rate (8N1) of the text transfer." : "Baud rate: fixed for this computer.");
+                : rs232 ? "Baud rate (8N1) of the text transfer." : "Baud rate: fixed 4800 for the Saver/Loader of the PC-1500.");
             ApplyFlow();
             if (!rs232 && term != null) term.Close();
             lblHint.Text = HintText();
@@ -889,16 +889,16 @@ namespace UartSlTest
                     string name = SharpBase(ProgImage.NameFromRem(img));
                     string path = null;
                     string note = "";
-                    if (chkAuto.Checked && !radio1500.Checked)
+                    if (chkAuto.Checked)
                     {
                         // auto tokenize ON: the image only exists in memory, the file is BASIC text
                         string problem;
-                        string bas = Pc1600Basic.Detokenize(img, out problem);
+                        string bas = Pc1600Basic.Detokenize(img, radio1500.Checked, out problem);
                         if (problem == null)
                         {
                             path = UniqueSharp(name, ".bas");
                             File.WriteAllBytes(path, Encoding.GetEncoding(28591).GetBytes(bas));
-                            note = " (converted from the PC-1600 intermediate code)";
+                            note = " (converted from the " + (radio1500.Checked ? "PC-1500" : "PC-1600") + " intermediate code)";
                         }
                         else Log("Conversion problem: " + problem + "; the image is kept as .img.");
                     }
@@ -1155,10 +1155,9 @@ namespace UartSlTest
                 {
                     if (!chkAuto.Checked) { Log("Auto tokenize is off: only .img files can be sent (use Convert or switch Auto tokenize on)."); return; }
                     // BASIC text: convert to the intermediate code of the Sharp first
-                    if (radio1500.Checked) { Log("Software Serial (Saver/Loader) does not exist for the PC-1500 yet. Use RS-232 or the Convert button."); return; }
-                    Log("Tokenizing to the PC-1600 intermediate code format...");
+                    Log("Tokenizing to the " + (radio1500.Checked ? "PC-1500" : "PC-1600") + " intermediate code format...");
                     string problem;
-                    img = Pc1600Basic.Tokenize(Encoding.GetEncoding(28591).GetString(data), out problem);
+                    img = Pc1600Basic.Tokenize(Encoding.GetEncoding(28591).GetString(data), radio1500.Checked, out problem);
                     if (img == null) { Log("Tokenizer error: " + problem); return; }
                     Log("Tokenized: " + ProgImage.CountLines(img) + " lines, " + img.Length + " B (program image).");
                 }
