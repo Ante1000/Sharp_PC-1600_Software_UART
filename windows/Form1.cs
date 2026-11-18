@@ -146,10 +146,10 @@ namespace UartSlTest
 
             var gbFiles = new GroupBox { Text = "Files", Left = 10, Top = 366, Width = 565, Height = 148, Anchor = TLR };   // only the list; the row of buttons below it ends with the Terminal button
             lstFiles = new ListBox { Left = 6, Top = 16, Width = 553, Height = 126, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
-            chkEof = new CheckBox { Text = "Add EOF marker", Left = 108, Top = 520, Width = 115, Checked = true };
-            chkAuto = new CheckBox { Text = "Auto tokenize", Left = 228, Top = 520, Width = 110, Checked = true };
+            chkEof = new CheckBox { Text = "Add EOF marker", Left = 202, Top = 520, Width = 115, Checked = true };
+            chkAuto = new CheckBox { Text = "Auto tokenize", Left = 322, Top = 520, Width = 110, Checked = true };
             btnAbort = Btn("Abort", Icons.Cross(), 485, 518, 90, 24, TR);
-            btnConvert = Btn("Convert", Icons.File(), 391, 518, 90, 24, TR);
+            btnConvert = Btn("Convert", Icons.File(), 104, 518, 90, 24, TL);
             btnView = Btn("View", Icons.File(), 10, 518, 90, 24, TL);
             btnView.Enabled = false;
             gbFiles.Controls.Add(lstFiles);
