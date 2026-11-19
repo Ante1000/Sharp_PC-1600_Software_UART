@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
 using System.IO.Ports;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -31,14 +32,16 @@ namespace UartSlTest
         readonly WrapToolTip tips = new WrapToolTip { AutoPopDelay = 9000, InitialDelay = 400, ReshowDelay = 200, ShowAlways = true };
         TerminalForm term;
         Button btnTerminal, btnAbort, btnConvert, btnLocations, btnDelete;
-        // default folders of the target computers: PC-1500, PC-1600, other 15-pin models
+        // default folders of the target computers: PC-1500, PC-1600, other Sharp (15-pin), FX-850/870, TRS-80 / NEC, other UART
+        const int NModels = 6;
         string[] locs = LoadLocations();      // overwritten by settings.ini when it exists
-        Button btnRefresh, btnOpen, btnBrowse, btnOpenDir, btnSend, btnSendOther, btnRefreshFiles;
-        TextBox txtDir, txtLog;
+        Button btnRefresh, btnOpen, btnFlush, btnReset, btnBrowse, btnOpenDir, btnSend, btnSendOther, btnRefreshFiles;
+        TextBox txtDir;
+        RichTextBox txtLog;
         ListBox lstFiles;
         Label lblHint;
         LedLabel led;
-        RadioButton radio1500, radio1600, radioOther;
+        RadioButton radio1500, radio1600, radioOther, radioFx, radioTrs, radioUart;
         RadioButton radioSoft, radioRs, radioSio;
         NumericUpDown numDelay;
         Timer timer;
@@ -58,7 +61,7 @@ namespace UartSlTest
             if (startPort != null && comboPorts.Items.Contains(startPort)) comboPorts.SelectedItem = startPort;
             else if (startPort != null && comboPorts.SelectedItem != null)
                 Log("The saved port " + startPort + " is not available; the first available port " + comboPorts.SelectedItem + " is selected.");
-            (startModel == 0 ? radio1500 : startModel == 2 ? radioOther : radio1600).Checked = true;
+            (startModel == 0 ? radio1500 : startModel == 2 ? radioOther : startModel == 3 ? radioFx : startModel == 4 ? radioTrs : startModel == 5 ? radioUart : radio1600).Checked = true;
             SetTarget();
             if (!File.Exists(SettingsFile())) SaveSettings();       // first start or the file was deleted: build it again
             Log("Ready. Select the port and click 'Open port'.");
@@ -79,20 +82,29 @@ namespace UartSlTest
             const AnchorStyles TR = AnchorStyles.Top | AnchorStyles.Right;
             const AnchorStyles TLR = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
 
-            var lblPort = new Label { Text = "Port:", Left = 20, Top = 16, Width = 32 };
-            comboPorts = new ComboBox { Left = 55, Top = 12, Width = 100, DropDownStyle = ComboBoxStyle.DropDownList };
-            btnRefresh = Btn("Refresh", Icons.Refresh(), 165, 9, 85, 28, TL);
-            btnOpen = Btn("Open port", Icons.Plug(), 258, 9, 85, 28, TL);
-            led = new LedLabel { Left = 348, Top = 11, Width = 85, Height = 26 };
-            var gbTarget = new GroupBox { Text = "Target computer", Left = 438, Top = 0, Width = 272, Height = 42, Anchor = TR };
-            radio1500 = new RadioButton { Text = "PC-1500", Left = 8, Top = 16, Width = 70 };
-            radio1600 = new RadioButton { Text = "PC-1600", Left = 80, Top = 16, Width = 70, Checked = true };
-            radioOther = new RadioButton { Text = "Other 15-pin SIO", Left = 152, Top = 16, Width = 116 };
-            gbTarget.Controls.AddRange(new Control[] { radio1500, radio1600, radioOther });
+            // the two boxes of the top area: Port settings (left) and Target computer (right), both 84 px high
+            var gbPort = new GroupBox { Text = "Port settings", Left = 10, Top = 0, Width = 340, Height = 84, Anchor = TL };
+            var lblPort = new Label { Text = "Port:", Left = 8, Top = 24, Width = 32 };
+            comboPorts = new ComboBox { Left = 44, Top = 20, Width = 100, DropDownStyle = ComboBoxStyle.DropDownList };
+            led = new LedLabel { Left = 44, Top = 48, Width = 100, Height = 26 };
+            btnOpen = Btn("Open port", Icons.Plug(), 156, 16, 85, 28, TL);
+            btnRefresh = Btn("Refresh", Icons.Refresh(), 248, 16, 85, 28, TL);
+            btnFlush = Btn("Flush", Icons.Flush(), 156, 48, 85, 28, TL);
+            btnReset = Btn("Reset port", Icons.Cross(), 248, 48, 85, 28, TL);
+            btnFlush.Enabled = btnReset.Enabled = false;
+            gbPort.Controls.AddRange(new Control[] { lblPort, comboPorts, led, btnOpen, btnRefresh, btnFlush, btnReset });
+            var gbTarget = new GroupBox { Text = "Target computer", Left = 354, Top = 0, Width = 356, Height = 84, Anchor = TR };
+            radio1500 = new RadioButton { Text = "PC-1500", Left = 8, Top = 24, Width = 100 };
+            radio1600 = new RadioButton { Text = "PC-1600", Left = 122, Top = 24, Width = 100, Checked = true };
+            radioOther = new RadioButton { Text = "Other Sharp", Left = 238, Top = 24, Width = 112 };
+            radioFx = new RadioButton { Text = "FX-850/870", Left = 8, Top = 54, Width = 100 };
+            radioTrs = new RadioButton { Text = "TRS-80", Left = 122, Top = 54, Width = 100 };
+            radioUart = new RadioButton { Text = "UART Other", Left = 238, Top = 54, Width = 112 };
+            gbTarget.Controls.AddRange(new Control[] { radio1500, radio1600, radioOther, radioFx, radioTrs, radioUart });
 
-            banner = new BannerPanel { Left = 10, Top = 46, Width = 700, Height = 132, Anchor = TLR };
+            banner = new BannerPanel { Left = 10, Top = 88, Width = 700, Height = 132, Anchor = TLR };
 
-            var gb = new GroupBox { Text = "Transmission mode", Left = 10, Top = 184, Width = 700, Height = 58, Anchor = TLR };
+            var gb = new GroupBox { Text = "Transmission mode", Left = 10, Top = 226, Width = 700, Height = 58, Anchor = TLR };
             radioSoft = new RadioButton { Text = "Software Serial", Checked = true };
             radioRs = new RadioButton { Text = "RS-232 serial" };
             radioSio = new RadioButton { Text = "TTL-UART", Enabled = false };
@@ -142,27 +154,27 @@ namespace UartSlTest
             }
             gb.Controls.AddRange(new Control[] { radioSoft, radioRs, radioSio, lblBaud, comboBaud, lblDelay, numDelay, lblEol, comboEol, lblFlow, comboFlow });
 
-            var lblDir = new Label { Text = "Folder:", Left = 10, Top = 256, Width = 50 };
+            var lblDir = new Label { Text = "Folder:", Left = 10, Top = 298, Width = 50 };
             txtDir = new TextBox
             {
-                Left = 65, Top = 252, Width = 405, Anchor = TLR,
+                Left = 65, Top = 294, Width = 405, Anchor = TLR,
                 Text = locs[1]
             };
-            btnLocations = Btn("Folders", Icons.Folder(), 474, 249, 76, 28, TR);
-            btnBrowse = Btn("Browse", Icons.Folder(), 554, 249, 76, 28, TR);
-            btnOpenDir = Btn("Open", Icons.Folder(), 634, 249, 76, 28, TR);
+            btnLocations = Btn("Folders", Icons.Folder(), 474, 291, 76, 28, TR);
+            btnBrowse = Btn("Browse", Icons.Folder(), 554, 291, 76, 28, TR);
+            btnOpenDir = Btn("Open", Icons.Folder(), 634, 291, 76, 28, TR);
 
-            var gbInfo = new GroupBox { Text = "Info", Left = 10, Top = 280, Width = 700, Height = 84, Anchor = TLR };
+            var gbInfo = new GroupBox { Text = "Info", Left = 10, Top = 322, Width = 700, Height = 84, Anchor = TLR };
             lblHint = new Label { Left = 8, Top = 14, Width = 684, Height = 67, Anchor = TLR };
             gbInfo.Controls.Add(lblHint);
 
-            var gbFiles = new GroupBox { Text = "Files", Left = 10, Top = 366, Width = 565, Height = 148, Anchor = TLR };   // only the list; the row of buttons below it ends with the Terminal button
+            var gbFiles = new GroupBox { Text = "Files", Left = 10, Top = 408, Width = 565, Height = 148, Anchor = TLR };   // only the list; the row of buttons below it ends with the Terminal button
             lstFiles = new ListBox { Left = 6, Top = 16, Width = 553, Height = 126, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
-            chkEof = new CheckBox { Text = "Add EOF marker", Left = 202, Top = 520, Width = 115, Checked = true };
-            chkAuto = new CheckBox { Text = "Auto tokenize", Left = 322, Top = 520, Width = 110, Checked = true };
-            btnAbort = Btn("Abort", Icons.Cross(), 485, 518, 90, 24, TR);
-            btnConvert = Btn("Convert", Icons.File(), 104, 518, 90, 24, TL);
-            btnView = Btn("View", Icons.File(), 10, 518, 90, 24, TL);
+            chkEof = new CheckBox { Text = "Add EOF marker", Left = 202, Top = 562, Width = 115, Checked = true };
+            chkAuto = new CheckBox { Text = "Auto tokenize", Left = 322, Top = 562, Width = 110, Checked = true };
+            btnAbort = Btn("Abort", Icons.Cross(), 485, 560, 90, 24, TR);
+            btnConvert = Btn("Convert", Icons.File(), 104, 560, 90, 24, TL);
+            btnView = Btn("View", Icons.File(), 10, 560, 90, 24, TL);
             btnView.Enabled = false;
             gbFiles.Controls.Add(lstFiles);
             // files dragged from the desktop / Explorer are copied to the current folder
@@ -172,26 +184,26 @@ namespace UartSlTest
                 dc.DragEnter += (s2, e2) => { e2.Effect = e2.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None; };
                 dc.DragDrop += (s2, e2) => DropFiles(e2.Data.GetData(DataFormats.FileDrop) as string[]);
             }
-            btnSend = Btn("Send selected", Icons.Plane(), 585, 366, 125, 32, TR);
-            btnSendOther = Btn("Send file...", Icons.File(), 585, 402, 125, 32, TR);
-            btnRefreshFiles = Btn("Refresh list", Icons.Refresh(), 585, 438, 125, 32, TR);
-            btnDelete = Btn("Delete file", Icons.Cross(), 585, 474, 125, 32, TR);
-            btnTerminal = Btn("Terminal", Icons.Terminal(), 585, 510, 125, 32, TR);
+            btnSend = Btn("Send selected", Icons.Plane(), 585, 408, 125, 32, TR);
+            btnSendOther = Btn("Send file...", Icons.File(), 585, 444, 125, 32, TR);
+            btnRefreshFiles = Btn("Refresh list", Icons.Refresh(), 585, 480, 125, 32, TR);
+            btnDelete = Btn("Delete file", Icons.Cross(), 585, 516, 125, 32, TR);
+            btnTerminal = Btn("Terminal", Icons.Terminal(), 585, 552, 125, 32, TR);
 
             var gbLog = new GroupBox
             {
-                Text = "Log", Left = 10, Top = 546, Width = 700, Height = 118,
+                Text = "Log", Left = 10, Top = 588, Width = 700, Height = 118,
                 Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
             };
-            txtLog = new TextBox
+            txtLog = new RichTextBox
             {
-                Left = 6, Top = 14, Width = 688, Height = 100, Multiline = true,
-                ScrollBars = ScrollBars.Vertical, ReadOnly = true, Font = new Font("Consolas", 9F),
+                Left = 6, Top = 14, Width = 688, Height = 100,
+                ScrollBars = RichTextBoxScrollBars.Vertical, ReadOnly = true, Font = new Font("Consolas", 9F), BackColor = SystemColors.Window, DetectUrls = false,
                 Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
             };
             gbLog.Controls.Add(txtLog);
 
-            Controls.AddRange(new Control[] { lblPort, comboPorts, btnRefresh, btnOpen, led, gbTarget, banner, gb,
+            Controls.AddRange(new Control[] { gbPort, gbTarget, banner, gb,
                 lblDir, txtDir, btnLocations, btnBrowse, btnOpenDir, gbInfo, gbFiles, btnView, chkEof, chkAuto, btnConvert, btnAbort, btnSend, btnSendOther, btnRefreshFiles, btnDelete, btnTerminal, gbLog });
 
             // title row: everything else moves down by one row (40 px)
@@ -217,7 +229,9 @@ namespace UartSlTest
             }
 
 
-            btnRefresh.Click += delegate { if (port != null) FlushBuffers(); else RefreshPorts(); };
+            btnRefresh.Click += delegate { RefreshPorts(); };
+            btnFlush.Click += delegate { FlushBuffers(); };
+            btnReset.Click += delegate { ResetPort(); };
             btnOpen.Click += delegate { TogglePort(); };
             radioSoft.CheckedChanged += delegate { UpdateMode(); };
             radioRs.CheckedChanged += delegate { UpdateMode(); };
@@ -225,6 +239,9 @@ namespace UartSlTest
             radio1500.CheckedChanged += delegate { if (radio1500.Checked) SetTarget(); };
             radio1600.CheckedChanged += delegate { if (radio1600.Checked) SetTarget(); };
             radioOther.CheckedChanged += delegate { if (radioOther.Checked) SetTarget(); };
+            radioFx.CheckedChanged += delegate { if (radioFx.Checked) SetTarget(); };
+            radioTrs.CheckedChanged += delegate { if (radioTrs.Checked) SetTarget(); };
+            radioUart.CheckedChanged += delegate { if (radioUart.Checked) SetTarget(); };
             comboBaud.SelectedIndexChanged += delegate { if (comboBaud.Enabled && comboBaud.SelectedItem != null) { if (rs232) savedBaud = (string)comboBaud.SelectedItem; else savedSoftBaud = (string)comboBaud.SelectedItem; } ApplyBaud(); };
             btnBrowse.Click += delegate
             {
@@ -268,11 +285,16 @@ namespace UartSlTest
 
             tips.SetToolTip(comboPorts, "Select a COM port, or the virtual COM port created by a USB adapter (FTDI)");
             tips.SetToolTip(btnRefresh, "Re-scan the list of available COM ports.");
+            tips.SetToolTip(btnFlush, "Flush: discard the data waiting in the port buffers and in the receive buffer. Use it before a transfer, after an interrupted transfer, and after the Sharp was switched on or reset (it may have sent garbage). Active when the port is open.");
+            tips.SetToolTip(btnReset, "Reset port: close the port and open it again with the current settings, and clear the buffers. Active when the port is open.");
             tips.SetToolTip(btnOpen, "Open or close the selected COM port.");
             tips.SetToolTip(led, "Port status: green = open, dark = closed.");
             tips.SetToolTip(radio1500, "Target: Sharp PC-1500 (software serial Saver/Loader at 4800 baud, or RS-232 through the CE-158(X) interface).");
             tips.SetToolTip(radio1600, "Target: Sharp PC-1600 (software serial Saver/Loader or its RS-232 port).");
             tips.SetToolTip(radioOther, "Target: other Sharp pocket computers with the 15-pin connector (TTL-UART SIO).");
+            tips.SetToolTip(radioFx, "Casio FX-850P, FX-870P and similar.");
+            tips.SetToolTip(radioTrs, "TRS-80 model 100, NEC-8201.");
+            tips.SetToolTip(radioUart, "Other computers with UART interface TTL or RS-232.");
             tips.SetToolTip(radioSoft, "Software UART in the Sharp (machine-language Saver/Loader), binary .img files. PC-1600: speed 1200 to 19200 (as chosen in the SL installer); PC-1500: 4800 baud.");
             tips.SetToolTip(radioRs, "Classic RS-232 text transfer, like a terminal program. The baud rate is selectable.");
             tips.SetToolTip(radioSio, "TTL-UART SIO text transfer through the 15-pin connector. The baud rate is selectable.");
@@ -311,19 +333,18 @@ namespace UartSlTest
         }
 
         // target computer: default folder and the available transmission modes
+        //   0 PC-1500, 1 PC-1600 (Software Serial or RS-232), 2 Other Sharp (15-pin, TTL-UART), 3 Casio FX-850/870 (TTL-UART),
+        //   4 TRS-80 / NEC (RS-232), 5 other UART computer (RS-232 or TTL-UART)
         void SetTarget()
         {
-            bool other = radioOther.Checked;
-            bool p1500 = radio1500.Checked;
-            int nm = other ? 2 : p1500 ? 0 : 1;
+            int nm = radio1500.Checked ? 0 : radio1600.Checked ? 1 : radioOther.Checked ? 2 : radioFx.Checked ? 3 : radioTrs.Checked ? 4 : 5;
             if (curModel >= 0 && nm != curModel) CaptureUi(curModel);     // keep the settings of the computer we leave
             curModel = nm;
-            radioSoft.Enabled = radioRs.Enabled = !other;
-            radioSio.Enabled = other;
+            radioSoft.Enabled = nm <= 1;
+            radioRs.Enabled = nm != 2 && nm != 3;
+            radioSio.Enabled = nm == 2 || nm == 3 || nm == 5;
             radioRs.Text = "RS-232 serial";
-            if (other) radioSio.Checked = true;
-            else if (radioSio.Checked) radioSoft.Checked = true;
-            banner.ModelName = other ? "Sharp with 15-pin connector" : p1500 ? "Sharp PC-1500" : "Sharp PC-1600";
+            banner.ModelName = ModelCaptions[nm];
             banner.Model = nm;
             banner.Invalidate();
             ApplyCfg(nm);
@@ -331,8 +352,21 @@ namespace UartSlTest
             UpdateMode();
         }
 
+        static readonly string[] ModelCaptions = { "Sharp PC-1500", "Sharp PC-1600", "Sharp with 15-pin connector", "Casio FX-850P / FX-870P", "TRS-80 / NEC PC-8201", "Other UART computer" };
+
         string HintText()
         {
+            if (curModel == 3)
+                return "Casio FX-850P / FX-870P: TTL levels 0 / +5 V (USB-TTL adapter, never RS-232 levels), 300 to 4800 bps.\r\n" +
+                       "OPEN \"COM0:6,N,8,1,N,N,N,N,N\" AS #1 (6 = 4800, 5 = 2400, 4 = 1200, 3 = 600, 2 = 300); PRINT #1,..; INPUT #1,A$; LINE INPUT #1,A$; CLOSE.\r\n" +
+                       "Program (text): SAVE \"COM0:6,N,8,1,N,N,N,N,N\" = Receive, LOAD \"COM0:6,N,8,1,N,N,N,N,N\" = Send.";
+            if (curModel == 4)
+                return "TRS-80 Model 100 / NEC PC-8201: DB-25 RS-232C, null-modem cable. OPEN \"COM:88N1E\" FOR OUTPUT AS 1 / FOR INPUT AS 2 (8 = 9600, 3 = 300, 9 = 19200).\r\n" +
+                       "PRINT #1,..; LINE INPUT #2,A$; A$=INPUT$(n,2); CLOSE 1,2. Program (ASCII): SAVE \"COM:88N1E\" = Receive, LOAD \"COM:48N1E\" = Send.\r\n" +
+                       "LOAD tokenizes while receiving: use 600 to 1200 bps; SAVE is stable up to 19200.";
+            if (curModel == 5)
+                return "Any computer with a UART interface: TTL (3.3 / 5 V, through a USB-TTL adapter) or RS-232 (through a USB-RS232 cable; connect the lines crossed, null-modem).\r\n" +
+                       "Text transfer (.bas) with the baud rate, flow control, line end and line delay set here (8N1). Use the Terminal for tests. Never connect RS-232 levels to a TTL-only device.";
             if (radioSio.Checked)
                 return "Compatible: PC-1350, PC-1360, PC-1450..90, PC-E500..650, PC-U6000, PC-2500 (15-pin, TTL-UART SIO via a USB/COM adapter).\r\n" +
                        "PC-1350 / PC-1360: OPEN \"1200,N,8,1,A,C,&1A\", then LOAD (SerComet: Send) or SAVE (SerComet: Receive).\r\n" +
@@ -354,7 +388,7 @@ namespace UartSlTest
 
         static string DefaultLocation(int i)
         {
-            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), i == 0 ? "PC1500" : i == 1 ? "PC1600" : "PC_15-pin");
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), new[] { "PC1500", "PC1600", "PC_15-pin", "FX-850", "TRS-80", "UART" }[i]);
         }
 
         // ------------------------------------------------------------------ settings.ini
@@ -371,10 +405,11 @@ namespace UartSlTest
             public string Dir;                  // null = the default folder
         }
 
-        readonly ModelCfg[] cfg = { new ModelCfg { Delay = 200 }, new ModelCfg(), new ModelCfg { Mode = 2 } };
+        readonly ModelCfg[] cfg = { new ModelCfg { Delay = 200 }, new ModelCfg(), new ModelCfg { Mode = 2 }, new ModelCfg { Mode = 2, Baud = "4800" },
+            new ModelCfg { Mode = 1, Baud = "1200", Delay = 200, Eol = 0 }, new ModelCfg { Mode = 1 } };
         int curModel = -1, startModel = 1;
         string startPort;
-        static readonly string[] ModelNames = { "PC-1500", "PC-1600", "Other 15-pin" };
+        static readonly string[] ModelNames = { "PC-1500", "PC-1600", "Other Sharp", "FX-850/870", "TRS-80", "UART Other" };
         static readonly string[] ModeNames = { "Software UART", "RS-232", "TTL-UART" };
         static readonly string[] EolNames = { "CR", "CR+LF", "LF" };
         static readonly string[] FlowNames = { "None", "XON/XOFF", "RTS/CTS", "DSR/DTR" };
@@ -394,7 +429,7 @@ namespace UartSlTest
 
         void CaptureUi(int m)
         {
-            if (m < 0 || m > 2) return;
+            if (m < 0 || m >= NModels) return;
             var c = cfg[m];
             c.Mode = radioSio.Checked ? 2 : radioRs.Checked ? 1 : 0;
             c.Baud = savedBaud;
@@ -410,10 +445,10 @@ namespace UartSlTest
         void ApplyCfg(int m)
         {
             var c = cfg[m];
-            if (m == 2) radioSio.Checked = true;
-            else if (c.Mode == 1) radioRs.Checked = true;
+            if (m == 2 || m == 3 || (m == 5 && c.Mode == 2)) radioSio.Checked = true;
+            else if (m == 4 || m == 5 || c.Mode == 1) radioRs.Checked = true;
             else radioSoft.Checked = true;
-            savedBaud = Array.IndexOf(TextBauds, c.Baud) >= 0 ? c.Baud : "9600";
+            savedBaud = Array.IndexOf(TextBaudsFor(m), c.Baud) >= 0 ? c.Baud : (m == 3 ? "4800" : "9600");
             savedSoftBaud = Array.IndexOf(SoftBauds, c.SoftBaud) >= 0 ? c.SoftBaud : "9600";
             numDelay.Value = Math.Max(numDelay.Minimum, Math.Min(numDelay.Maximum, c.Delay));
             comboEol.SelectedIndex = c.Eol >= 0 && c.Eol < 3 ? c.Eol : 1;
@@ -450,7 +485,7 @@ namespace UartSlTest
                 };
                 startPort = get("General", "Port");
                 startModel = IndexOf(ModelNames, get("General", "Target"), 1);
-                for (int m = 0; m < 3; m++)
+                for (int m = 0; m < NModels; m++)
                 {
                     string d = get("Folders", ModelNames[m]);
                     if (d != null) locs[m] = d;
@@ -484,8 +519,8 @@ namespace UartSlTest
                 sb.AppendLine();
                 sb.AppendLine("; default folders of the programs (Folders window)");
                 sb.AppendLine("[Folders]");
-                for (int m = 0; m < 3; m++) sb.AppendLine(ModelNames[m] + "=" + locs[m]);
-                for (int m = 0; m < 3; m++)
+                for (int m = 0; m < NModels; m++) sb.AppendLine(ModelNames[m] + "=" + locs[m]);
+                for (int m = 0; m < NModels; m++)
                 {
                     var c = cfg[m];
                     sb.AppendLine();
@@ -514,13 +549,14 @@ namespace UartSlTest
 
         static string[] LoadLocations()
         {
-            var l = new[] { DefaultLocation(0), DefaultLocation(1), DefaultLocation(2) };
+            var l = new string[NModels];
+            for (int i = 0; i < NModels; i++) l[i] = DefaultLocation(i);
             try
             {
                 if (File.Exists(LocationsFile()))
                 {
                     string[] lines = File.ReadAllLines(LocationsFile());
-                    for (int i = 0; i < 3 && i < lines.Length; i++) if (lines[i].Trim().Length > 0) l[i] = lines[i].Trim();
+                    for (int i = 0; i < NModels && i < lines.Length; i++) if (lines[i].Trim().Length > 0) l[i] = lines[i].Trim();
                 }
             }
             catch { }
@@ -530,11 +566,11 @@ namespace UartSlTest
         // second window: the folders of the programs for each target computer
         void EditLocations()
         {
-            using (var d = new LocationsForm(locs, new[] { DefaultLocation(0), DefaultLocation(1), DefaultLocation(2) }))
+            using (var d = new LocationsForm(locs, Enumerable.Range(0, NModels).Select(DefaultLocation).ToArray()))
             {
                 if (d.ShowDialog(this) != DialogResult.OK) return;
                 locs = d.Result;
-                for (int m = 0; m < 3; m++) cfg[m].Dir = locs[m];      // the new default folders are used from now on
+                for (int m = 0; m < NModels; m++) cfg[m].Dir = locs[m];      // the new default folders are used from now on
                 SaveSettings();
                 SetDefaultDir(locs[curModel < 0 ? 1 : curModel]);
             }
@@ -588,11 +624,15 @@ namespace UartSlTest
         string savedSoftBaud = "9600";   // baud of the Software UART of the PC-1600 (the same as chosen in the SL installer)
         static readonly string[] TextBauds = { "300", "600", "1200", "2400", "4800", "9600", "19200" };
         static readonly string[] SoftBauds = { "1200", "2400", "4800", "9600", "19200" };
+        static readonly string[] FxBauds = { "300", "600", "1200", "2400", "4800" };      // Casio FX-850P / 870P: BASIC offers 150 to 4800 bps
+        static string[] TextBaudsFor(int m) { return m == 3 ? FxBauds : TextBauds; }
 
         // the combo has all the speeds for the text modes and the five speeds of the SL installer for the Software UART
         void FillBaud(string[] list)
         {
-            if (comboBaud.Items.Count == list.Length) return;
+            bool same = comboBaud.Items.Count == list.Length;
+            for (int i = 0; same && i < list.Length; i++) if ((string)comboBaud.Items[i] != list[i]) same = false;
+            if (same) return;
             comboBaud.Items.Clear();
             comboBaud.Items.AddRange(list);
         }
@@ -613,7 +653,7 @@ namespace UartSlTest
             numDelay.Enabled = btnTerminal.Enabled = comboEol.Enabled = comboFlow.Enabled = chkEof.Enabled = rs232;
             chkAuto.Enabled = !rs232;
             comboBaud.Enabled = false;                                      // (so that filling the list does not change the saved values)
-            FillBaud(rs232 ? TextBauds : SoftBauds);
+            FillBaud(rs232 ? TextBaudsFor(curModel) : SoftBauds);
             comboBaud.SelectedItem = rs232 ? savedBaud : softEdit ? savedSoftBaud : "4800";
             comboBaud.Enabled = rs232 || softEdit;
             tips.SetToolTip(comboBaud, softEdit
@@ -640,7 +680,49 @@ namespace UartSlTest
 
         void Log(string s)
         {
+            txtLog.SelectionStart = txtLog.TextLength; txtLog.SelectionLength = 0;
+            txtLog.SelectionFont = txtLog.Font; txtLog.SelectionColor = txtLog.ForeColor;
             txtLog.AppendText(DateTime.Now.ToString("HH:mm:ss") + "  " + s + "\r\n");
+        }
+
+        // an important message: bold and dark red
+        void LogBold(string s)
+        {
+            txtLog.SelectionStart = txtLog.TextLength; txtLog.SelectionLength = 0;
+            txtLog.SelectionFont = new Font(txtLog.Font, FontStyle.Bold); txtLog.SelectionColor = Color.DarkRed;
+            txtLog.AppendText(DateTime.Now.ToString("HH:mm:ss") + "  " + s + "\r\n");
+            txtLog.SelectionStart = txtLog.TextLength; txtLog.SelectionLength = 0;
+            txtLog.SelectionFont = txtLog.Font; txtLog.SelectionColor = txtLog.ForeColor;
+        }
+
+        // ---- wrong baud rate: framing errors of the PC UART (the stop bit is not where it should be) and garbage in a text transfer
+        int frameErrors, frameWindow, lastBaudWarn;
+        void OnPortError(object sender, SerialErrorReceivedEventArgs e)
+        {
+            if (e.EventType != SerialError.Frame) return;
+            int now = Environment.TickCount;
+            if (unchecked(now - frameWindow) > 2000) { frameWindow = now; frameErrors = 0; }
+            if (++frameErrors < 5 || unchecked(now - lastBaudWarn) < 10000) return;
+            lastBaudWarn = now; frameErrors = 0;
+            try { BeginInvoke(new Action(() => LogBold("Wrong baud rate (framing errors on the line): reduce baud rate, or check that the Sharp uses the same speed."))); } catch { }
+        }
+
+        // text received but it is garbage: null bytes mean that the PC is too fast (the Sharp's bits are read as a longer "0"),
+        // bytes with the top bit set mean that the PC is too slow. null = does not look like a speed problem.
+        static string GuessBaudProblem(byte[] d)
+        {
+            if (d.Length < 8) return null;
+            int zeros = 0, high = 0, ctl = 0;
+            foreach (byte b in d)
+            {
+                if (b == 0) zeros++;
+                else if (b >= 0x80) high++;
+                else if (b < 32 && b != 9 && b != 10 && b != 13 && b != 26) ctl++;
+            }
+            if (zeros >= d.Length * 0.3) return "reduce baud rate";
+            if (high >= d.Length * 0.3) return "increase baud rate";
+            if (high + zeros + ctl >= d.Length * 0.3) return "change";
+            return null;
         }
 
         void RefreshPorts()
@@ -708,6 +790,7 @@ namespace UartSlTest
                 port.Handshake = FlowMode();
                 port.ReadBufferSize = 65536;
                 port.DataReceived += OnData;
+                port.ErrorReceived += OnPortError;
                 port.Open();
                 btnOpen.Text = "Close port";
                 btnOpen.Image = Icons.Cross();
@@ -722,18 +805,22 @@ namespace UartSlTest
             }
         }
 
-        // the port is open: the button is "Flush"; closed: "Refresh" (re-scan of the ports)
+        // Flush and Reset port work only while the port is open (Refresh and Open port always)
         void SetRefreshMode(bool open)
         {
-            btnRefresh.Text = open ? "Flush" : "Refresh";
-            btnRefresh.Image = open ? Icons.Flush() : Icons.Refresh();
-            // the icon stays at the left edge; the text is centred in the space to the right of the icon
-            btnRefresh.TextAlign = ContentAlignment.MiddleRight;
-            int tw = TextRenderer.MeasureText(btnRefresh.Text, btnRefresh.Font).Width;
-            btnRefresh.Padding = new Padding(0, 0, Math.Max(4, (btnRefresh.Width - 22 - tw) / 2), 0);
-            tips.SetToolTip(btnRefresh, open
-                ? "Flush: discard the data waiting in the port buffers and in the receive buffer. Use it before a transfer, after an interrupted transfer, and after the Sharp was switched on or reset (it may have sent garbage)."
-                : "Re-scan the list of available COM ports.");
+            btnFlush.Enabled = btnReset.Enabled = open;
+        }
+
+        // close the port and open it again with the current settings; the buffers are cleared
+        void ResetPort()
+        {
+            if (port == null) return;
+            string name = port.PortName;
+            ClosePort();
+            if (comboPorts.Items.Contains(name)) comboPorts.SelectedItem = name;
+            lock (rxLock) { rx.Clear(); }
+            TogglePort();
+            if (port != null) Log("Reset port: " + name + " was closed and opened again.");
         }
 
         void FlushBuffers()
@@ -751,7 +838,7 @@ namespace UartSlTest
         {
             if (port == null) return;
             if (term != null) term.Close();
-            try { port.DataReceived -= OnData; if (port.IsOpen) port.Close(); } catch { }
+            try { port.DataReceived -= OnData; port.ErrorReceived -= OnPortError; if (port.IsOpen) port.Close(); } catch { }
             port = null;
             btnOpen.Text = "Open port";
             btnOpen.Image = Icons.Plug();
@@ -857,6 +944,8 @@ namespace UartSlTest
             {
                 if (rs232 && !LooksLikeProgramText(data))
                 {
+                    string guess = GuessBaudProblem(data);
+                    if (guess != null) LogBold("Wrong baud rate, " + guess + " (the received data is garbage).");
                     Log("Ignored " + data.Length + " B of noise (not a BASIC listing); nothing was saved.");
                     return;
                 }
@@ -946,7 +1035,7 @@ namespace UartSlTest
         }
 
         // ------------------------------------------------------------------ names for the Sharp
-        int NameModel { get { return curModel < 0 ? 1 : curModel; } }
+        int NameModel { get { return curModel < 0 ? 1 : curModel > 2 ? 2 : curModel; } }      // the other computers use the rules of the 15-pin models
 
         // the name of a program for the selected computer (length and characters); no name: PRG + time
         string SharpBase(string raw)
@@ -1126,7 +1215,9 @@ namespace UartSlTest
         {
             if (txtLog.TextLength != progEnd) return;      // other messages were logged meanwhile: leave them alone
             string line = DateTime.Now.ToString("HH:mm:ss") + "  " + progText + " (" + pct + "%)\r\n";
-            txtLog.Text = txtLog.Text.Substring(0, progStart) + line;
+            txtLog.Select(progStart, txtLog.TextLength - progStart);
+            txtLog.SelectionFont = txtLog.Font; txtLog.SelectionColor = txtLog.ForeColor;
+            txtLog.SelectedText = line;
             progEnd = txtLog.TextLength;
             txtLog.SelectionStart = txtLog.TextLength;
             txtLog.ScrollToCaret();
@@ -1482,7 +1573,7 @@ namespace UartSlTest
         public bool PortOpen, Sending, Receiving, Blink;   // Blink toggles ~5x per second while data flows
         Bitmap cometImg;
         public string ModelName = "Sharp PC-1600";
-        public int Model = 1;                 // 0 PC-1500, 1 PC-1600, 2 other models with the 15-pin connector (drawing of a PC-E500)
+        public int Model = 1;                 // 0 PC-1500, 1 PC-1600, 2 other Sharp (15-pin, drawing of a PC-E500), 3 Casio FX-850/870, 4 TRS-80 / NEC, 5 other UART computer
 
         public BannerPanel() { DoubleBuffered = true; ResizeRedraw = true; }
 
@@ -1561,7 +1652,42 @@ namespace UartSlTest
 
         // Sharp pocket computers with the 15-pin connector (drawing of a PC-E500): dark grey body, a large display,
         // function keys under it, the QWERTY keys and a numeric pad with light keys
-        static void DrawPc15pin(Graphics g, int kx, int top)
+        // TRS-80 Model 100 / NEC PC-8201: a wide LCD above a keyboard
+        static void DrawTrs80(Graphics g, int kx, int top)
+        {
+            FillRound(g, Color.FromArgb(25, 25, 28), kx - 86, top + 10, 172, 82, 6);
+            FillRound(g, Color.FromArgb(150, 152, 150), kx - 85, top + 8, 170, 82, 6);
+            FillRound(g, Color.FromArgb(50, 50, 54), kx - 78, top + 13, 156, 38, 3);                          // display frame
+            using (var b = new SolidBrush(Color.FromArgb(160, 176, 150))) g.FillRectangle(b, kx - 74, top + 17, 148, 30);   // LCD 40 x 8
+            using (var b = new SolidBrush(Color.FromArgb(60, 78, 56)))
+                for (int row = 0; row < 4; row++) for (int c = 0; c < 36; c++) g.FillRectangle(b, kx - 70 + c * 4, top + 20 + row * 6, 3, 3);
+            using (var f = new Font("Arial", 6F, FontStyle.Bold)) Text(g, "TRS-80", f, Color.FromArgb(40, 40, 44), kx, top + 53);
+            using (var bk = new SolidBrush(Color.FromArgb(40, 40, 44)))
+            using (var bf = new SolidBrush(Color.FromArgb(215, 215, 210)))
+            {
+                for (int i = 0; i < 8; i++) g.FillRectangle(bf, kx - 76 + i * 19, top + 62, 15, 5);               // function keys
+                for (int row = 0; row < 3; row++)
+                    for (int col = 0; col < 13; col++) g.FillRectangle(bk, kx - 76 + col * 11 + row * 3, top + 70 + row * 6, 9, 4);
+                g.FillRectangle(bk, kx - 40, top + 87, 70, 3);
+            }
+        }
+
+        // another computer with a UART: a small board with a chip and a row of pins
+        static void DrawUartBoard(Graphics g, int kx, int top)
+        {
+            FillRound(g, Color.FromArgb(20, 70, 40), kx - 80, top + 14, 160, 76, 6);
+            FillRound(g, Color.FromArgb(30, 110, 62), kx - 79, top + 12, 158, 76, 6);
+            using (var b = new SolidBrush(Color.FromArgb(25, 25, 28))) g.FillRectangle(b, kx - 30, top + 30, 60, 38);                      // chip
+            using (var p = new Pen(Color.FromArgb(200, 200, 160), 2f))
+                for (int i = 0; i < 6; i++) { g.DrawLine(p, kx - 24 + i * 10, top + 26, kx - 24 + i * 10, top + 30); g.DrawLine(p, kx - 24 + i * 10, top + 68, kx - 24 + i * 10, top + 72); }
+            using (var f = new Font("Consolas", 9F, FontStyle.Bold)) Text(g, "UART", f, Color.FromArgb(220, 220, 220), kx, top + 43);
+            using (var b = new SolidBrush(Color.FromArgb(225, 200, 70)))
+                for (int i = 0; i < 4; i++) g.FillRectangle(b, kx - 74, top + 22 + i * 12, 9, 5);                                           // TX RX GND pins
+            using (var f = new Font("Arial", 5.5F, FontStyle.Bold))
+            { Text(g, "TX", f, Color.White, kx - 54, top + 21); Text(g, "RX", f, Color.White, kx - 54, top + 33); Text(g, "GND", f, Color.White, kx - 52, top + 45); }
+        }
+
+        static void DrawPc15pin(Graphics g, int kx, int top, string brand)
         {
             var state = g.Save();
             g.TranslateTransform(kx, top + 60);
@@ -1573,7 +1699,7 @@ namespace UartSlTest
             using (var b = new SolidBrush(Color.FromArgb(172, 188, 150))) g.FillRectangle(b, kx - 78, top + 15, 110, 28);   // large display
             using (var b = new SolidBrush(Color.FromArgb(60, 78, 56)))
                 for (int c = 0; c < 80; c += 3) g.FillRectangle(b, kx - 60 + c, top + 26, 2, 4);                       // a line of text
-            using (var f = new Font("Arial", 5.5F, FontStyle.Bold)) Text(g, "SHARP", f, Color.FromArgb(220, 220, 220), kx + 62, top + 12);
+            using (var f = new Font("Arial", 5.5F, FontStyle.Bold)) Text(g, brand, f, Color.FromArgb(220, 220, 220), kx + 62, top + 12);
             using (var bk = new SolidBrush(Color.FromArgb(34, 34, 38)))
             using (var bg = new SolidBrush(Color.FromArgb(210, 210, 206)))
             using (var bs = new SolidBrush(Color.FromArgb(165, 170, 175)))
@@ -1669,7 +1795,10 @@ namespace UartSlTest
                 for (int i = 0; i < 10; i++) { g.FillRectangle(b, pcx - 50 + i * 10, top + 84, 7, 3); g.FillRectangle(b, pcx - 48 + i * 10, top + 89, 7, 3); }
 
             if (Model == 0) DrawPc1500(g, kx, top);
-            else if (Model == 2) DrawPc15pin(g, kx, top);
+            else if (Model == 2) DrawPc15pin(g, kx, top, "SHARP");
+            else if (Model == 3) DrawPc15pin(g, kx, top, "CASIO");
+            else if (Model == 4) DrawTrs80(g, kx, top);
+            else if (Model == 5) DrawUartBoard(g, kx, top);
             else DrawPc1600(g, kx, top);
 
             // captions
@@ -1781,6 +1910,7 @@ namespace UartSlTest
     // About window
     public class AboutForm : Form
     {
+        const int W = 420;
         public AboutForm()
         {
             Text = "About SerComet";
@@ -1788,35 +1918,49 @@ namespace UartSlTest
             MaximizeBox = MinimizeBox = false;
             ShowInTaskbar = false;
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(380, 372);
+            ClientSize = new Size(W, 476);
 
-            Controls.Add(new PictureBox { Image = Icons.Comet(72), SizeMode = PictureBoxSizeMode.AutoSize, Left = (380 - 72) / 2, Top = 16 });
+            Controls.Add(new PictureBox { Image = Icons.Comet(72), SizeMode = PictureBoxSizeMode.AutoSize, Left = (W - 72) / 2, Top = 16 });
             AddLine("SerComet " + AppInfo.Version, 100, new Font("Segoe UI", 16F, FontStyle.Bold), Color.FromArgb(30, 70, 120));
             AddLine("File transfer tool for PC and Sharp pocket computers", 138, new Font("Segoe UI", 10F, FontStyle.Bold), Color.Black);
-            AddLine("Author: Alex Matczewski F4VTS", 170, new Font("Segoe UI", 9.5F, FontStyle.Bold), Color.Black);
-            AddLine("Copyright \u00A9 2026", 194, new Font("Segoe UI", 9.5F, FontStyle.Bold), Color.Black);
-            AddLine("License: GNU General Public License v3.0", 218, new Font("Segoe UI", 8.5F), Color.Black);
-            AddLine("BASIC token tables: \"Das Systemhandbuch f\u00FCr den PC-1600\"", 266, new Font("Segoe UI", 8.5F), Color.Black);
-            AddLine("by David von Oheimb. Thank you!", 286, new Font("Segoe UI", 8.5F), Color.Black);
-            //AddLine("PC-1500 token table: \"Tips PC-1500\" document", 304, new Font("Segoe UI", 8.5F), Color.Black);
-            var web = new LinkLabel { Text = "Web: github.com/Ante1000", Left = 0, Top = 242, Width = 380, Height = 20, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Segoe UI", 10F) };
-            web.Links.Add(5, 19, "https://github.com/Ante1000");
-            web.LinkClicked += delegate (object s, LinkLabelLinkClickedEventArgs e)
-            {
-                try { System.Diagnostics.Process.Start((string)e.Link.LinkData); } catch { }
-            };
-            Controls.Add(web);
+            AddLine("Author: Alex Matczewski F4VTS", 168, new Font("Segoe UI", 9.5F, FontStyle.Bold), Color.Black);
+            AddLine("Copyright \u00A9 2026", 190, new Font("Segoe UI", 9.5F, FontStyle.Bold), Color.Black);
+            AddLine("Free for personal, non-commercial and educational use.", 218, new Font("Segoe UI", 9F, FontStyle.Bold), Color.Black);
+            AddLine("License: PolyForm Noncommercial License 1.0.0", 240, new Font("Segoe UI", 8.5F), Color.Black);
             var tt = new WrapToolTip { AutoPopDelay = 9000, InitialDelay = 400, ShowAlways = true };
-            tt.SetToolTip(web, "Open the project page in the browser.");
-            var ok = new Button { Text = "OK", Left = (380 - 80) / 2, Top = 336, Width = 80, DialogResult = DialogResult.OK };
+            AddLink("Web: github.com/Ante1000", "https://github.com/Ante1000", 5, 19, 266, tt, "Open the project page in the browser.");
+            AddLink("YouTube: youtube.com/@anteamber", "https://www.youtube.com/@anteamber", 9, 24, 290, tt, "Open the YouTube channel in the browser.");
+            AddLine("Bug reports, suggestions, questions, contact:", 322, new Font("Segoe UI", 8.5F), Color.Black);
+            var mail = new LinkLabel { Text = "alex.f4vts@gmail.com", Left = 0, Top = 342, Width = W, Height = 20, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Segoe UI", 10F) };
+            mail.Links.Add(0, 20, "mailto:alex.f4vts@gmail.com");
+            mail.LinkClicked += OpenLink;
+            Controls.Add(mail);
+            tt.SetToolTip(mail, "Write an e-mail.");
+            AddLine("BASIC token tables: \"Das Systemhandbuch f\u00FCr den PC-1600\"", 378, new Font("Segoe UI", 8.5F), Color.Black);
+            AddLine("by David von Oheimb. Thank you!", 398, new Font("Segoe UI", 8.5F), Color.Black);
+            var ok = new Button { Text = "OK", Left = (W - 80) / 2, Top = 436, Width = 80, DialogResult = DialogResult.OK };
             Controls.Add(ok);
             AcceptButton = ok;
             tt.SetToolTip(ok, "Close this window.");
         }
 
+        static void OpenLink(object s, LinkLabelLinkClickedEventArgs e)
+        {
+            try { System.Diagnostics.Process.Start((string)e.Link.LinkData); } catch { }
+        }
+
+        void AddLink(string text, string url, int start, int length, int top, WrapToolTip tt, string tip)
+        {
+            var l = new LinkLabel { Text = text, Left = 0, Top = top, Width = W, Height = 20, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Segoe UI", 10F) };
+            l.Links.Add(start, length, url);
+            l.LinkClicked += OpenLink;
+            Controls.Add(l);
+            tt.SetToolTip(l, tip);
+        }
+
         void AddLine(string text, int top, Font font, Color color)
         {
-            Controls.Add(new Label { Text = text, Left = 0, Top = top, Width = 380, Height = 24, TextAlign = ContentAlignment.MiddleCenter, Font = font, ForeColor = color });
+            Controls.Add(new Label { Text = text, Left = 0, Top = top, Width = W, Height = 24, TextAlign = ContentAlignment.MiddleCenter, Font = font, ForeColor = color });
         }
     }
 
@@ -2114,7 +2258,7 @@ namespace UartSlTest
     // Window for the folders of the programs (one per target computer)
     public class LocationsForm : Form
     {
-        readonly TextBox[] boxes = new TextBox[3];
+        readonly TextBox[] boxes = new TextBox[6];
         public string[] Result;
 
         public LocationsForm(string[] current, string[] defaults)
@@ -2124,11 +2268,11 @@ namespace UartSlTest
             MaximizeBox = MinimizeBox = false;
             ShowInTaskbar = false;
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(560, 170);
+            ClientSize = new Size(560, 278);
             try { Icon = Icons.AppIcon(); } catch { }
             var tt = new WrapToolTip { AutoPopDelay = 9000, InitialDelay = 400, ShowAlways = true };
-            string[] names = { "PC-1500", "PC-1600", "Other 15-pin" };
-            for (int i = 0; i < 3; i++)
+            string[] names = { "PC-1500", "PC-1600", "Other Sharp", "FX-850/870", "TRS-80", "UART Other" };
+            for (int i = 0; i < 6; i++)
             {
                 int row = i;
                 Controls.Add(new Label { Text = names[i] + ":", Left = 12, Top = 19 + i * 36, Width = 85 });
@@ -2146,19 +2290,19 @@ namespace UartSlTest
                 tt.SetToolTip(browse, "Choose the folder.");
                 Controls.AddRange(new Control[] { boxes[i], browse });
             }
-            var defs = new Button { Text = "Defaults", Left = 12, Top = 128, Width = 90, Height = 26 };
-            defs.Click += delegate { for (int i = 0; i < 3; i++) boxes[i].Text = defaults[i]; };
+            var defs = new Button { Text = "Defaults", Left = 12, Top = 236, Width = 90, Height = 26 };
+            defs.Click += delegate { for (int i = 0; i < 6; i++) boxes[i].Text = defaults[i]; };
             tt.SetToolTip(defs, "Restore the standard folders (in Documents).");
-            var ok = new Button { Text = "OK", Left = 370, Top = 128, Width = 85, Height = 26, DialogResult = DialogResult.OK };
-            var cancel = new Button { Text = "Cancel", Left = 465, Top = 128, Width = 85, Height = 26, DialogResult = DialogResult.Cancel };
+            var ok = new Button { Text = "OK", Left = 370, Top = 236, Width = 85, Height = 26, DialogResult = DialogResult.OK };
+            var cancel = new Button { Text = "Cancel", Left = 465, Top = 236, Width = 85, Height = 26, DialogResult = DialogResult.Cancel };
             Controls.AddRange(new Control[] { defs, ok, cancel });
             AcceptButton = ok;
             CancelButton = cancel;
             FormClosing += delegate
             {
                 if (DialogResult != DialogResult.OK) return;
-                Result = new string[3];
-                for (int i = 0; i < 3; i++) Result[i] = boxes[i].Text.Trim().Length > 0 ? boxes[i].Text.Trim() : defaults[i];
+                Result = new string[6];
+                for (int i = 0; i < 6; i++) Result[i] = boxes[i].Text.Trim().Length > 0 ? boxes[i].Text.Trim() : defaults[i];
             };
         }
     }
@@ -2263,7 +2407,7 @@ namespace UartSlTest
 
     public static class AppInfo
     {
-        public const string Version = "1.2";      // 1.1: Software UART speeds 1200 to 19200 (SL V3.0), settings.ini, .img files; 1.2: names of the programs checked for the Sharp
+        public const string Version = "1.3";      // 1.1: Software UART speeds 1200 to 19200 (SL V3.0), settings.ini, .img files; 1.2: names of the programs checked for the Sharp; 1.3: PC-1500 Software UART (4800 bps), six target computers, Port settings box, Flush and Reset port, wrong baud rate warning
     }
 
     // Names of programs for the pocket computers: the length and the characters that the Sharp accepts
